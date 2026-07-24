@@ -22,3 +22,19 @@ export function progressBar(position: number, duration: number, size = 20): stri
 
   return "▬".repeat(filled) + "🔘" + "▬".repeat(Math.max(size - filled - 1, 0));
 }
+
+/**
+ * "90", "1:30" veya "1:02:03" gibi bir konum metnini milisaniyeye çevirir.
+ * Geçersizse null döner.
+ */
+export function parseTimeToMs(input: string): number | null {
+  const trimmed = input.trim();
+  if (!/^\d+(:\d{1,2}){0,2}$/.test(trimmed)) return null;
+
+  const seconds = trimmed
+    .split(":")
+    .map(Number)
+    .reduce((total, part) => total * 60 + part, 0);
+
+  return seconds * 1000;
+}
