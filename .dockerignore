@@ -1,0 +1,24 @@
+# Bağımlılıklar ve derleme çıktısı (imaj içinde yeniden üretilir)
+node_modules
+dist
+
+# Sırlar — asla imaja girmemeli
+.env
+.env.*
+!.env.example
+
+# Git ve CI
+.git
+.github
+.gitattributes
+.husky
+
+# NodeLink kaynağı (compose'da hazır imaj olarak kullanılıyor)
+nodelink
+
+# Diğer
+*.log
+.claude
+.vscode
+.idea
+README.md

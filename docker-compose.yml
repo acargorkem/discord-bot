@@ -1,0 +1,39 @@
+# Bot + NodeLink'i birlikte ayağa kaldırır.
+# Yerel:  docker compose up --build
+# VPS:    docker compose pull && docker compose up -d
+#
+# Değişkenler kök .env dosyasından okunur (DISCORD_TOKEN, BOT_IMAGE, NODELINK_PASSWORD ...).
+
+services:
+  nodelink:
+    image: performanc/nodelink:3.8.0
+    container_name: nodelink
+    environment:
+      NODELINK_SERVER_HOST: "0.0.0.0"
+      NODELINK_SERVER_PORT: "4000"
+      NODELINK_SERVER_PASSWORD: "${NODELINK_PASSWORD:-youshallnotpass}"
+      NODELINK_CLUSTER_WORKERS: "1"
+      NODELINK_LOGGING_LEVEL: "info"
+    restart: unless-stopped
+    networks: [botnet]
+
+  bot:
+    # Yereldeyken derlenir; VPS'te CI'nin ittiği imaj (BOT_IMAGE) çekilir.
+    image: ${BOT_IMAGE:-discord-bot:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord-bot
+    depends_on: [nodelink]
+    env_file: .env
+    environment:
+      # NodeLink'e compose ağı üzerinden servis adıyla bağlan.
+      LAVALINK_HOST: "nodelink"
+      LAVALINK_PORT: "4000"
+      LAVALINK_PASSWORD: "${NODELINK_PASSWORD:-youshallnotpass}"
+    restart: unless-stopped
+    networks: [botnet]
+
+networks:
+  botnet:
+    driver: bridge

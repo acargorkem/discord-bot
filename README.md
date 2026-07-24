@@ -70,14 +70,35 @@ NodeLink `4000` portunda çalışır (bkz. `nodelink/config.js`). Bot ona `local
 
 ---
 
+## Docker ile Çalıştırma
+
+Bot ve NodeLink'i tek komutla, birlikte ayağa kaldırır (`docker-compose.yml`). NodeLink resmi imajdan (`performanc/nodelink`) gelir; ayrıca klonlamana gerek yok.
+
+```bash
+cp .env.example .env   # doldur
+docker compose up --build
+```
+
+- Bot ve NodeLink aynı iç ağda konuşur; bot NodeLink'e `nodelink:4000` servis adıyla bağlanır.
+- NodeLink portu dışarı **açılmaz** (yalnızca bot erişir) — güvenli.
+
+## CI/CD (GitHub Actions)
+
+- **`.github/workflows/ci.yml`** — her push/PR'da tip kontrolü, lint, biçim ve derleme.
+- **`.github/workflows/deploy.yml`** — `main`'e push'ta bot imajını derleyip GHCR'a (`ghcr.io`) iter, ardından SSH ile VPS'e bağlanıp `docker compose pull && up -d` çalıştırır.
+
+Deploy için gereken **GitHub Secrets**: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (ve gerekiyorsa `VPS_PORT`). VPS'te `~/discord-bot` altında repo klonlu, `.env` dolu ve `BOT_IMAGE` ayarlı olmalı — detaylar VPS kurulum rehberinde.
+
+---
+
 ## Yol Haritası
 
 - [x] **Faz 0 — Ortam & proje iskeleti:** git, TypeScript, klasör yapısı
 - [x] **Faz 1 — Bot iskeleti:** slash komut altyapısı, `/ping`
 - [x] **Faz 2 — NodeLink entegrasyonu:** ses sunucusu kurulumu, ses kanalına bağlanma, `/play`
-- [ ] **Faz 3 — Çekirdek müzik:** `/play`, kuyruk, `/skip`, `/pause`, `/stop`, `/queue`
-- [ ] **Faz 4 — Kullanıcı deneyimi:** butonlar, playlist desteği, otomatik ayrılma
-- [ ] **Faz 5 — Süreklilik:** 7/24 çalışma, loglama, dayanıklılık
+- [x] **Faz 3 — Çekirdek müzik:** `/skip`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`
+- [x] **Faz 4 — Kullanıcı deneyimi:** kontrol butonları, playlist desteği, otomatik ayrılma
+- [ ] **Faz 5 — Süreklilik:** Docker, CI/CD, VPS'te 7/24 çalışma
 
 ---
 

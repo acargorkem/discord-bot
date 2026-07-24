@@ -1,0 +1,10 @@
+# Tüm metin dosyalarında satır sonlarını LF'e sabitle (Windows/Linux tutarlılığı,
+# Docker script'leri ve husky hook'ları Linux'ta bozulmasın diye).
+* text=auto eol=lf
+
+# İkili dosyalar dokunulmasın.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
