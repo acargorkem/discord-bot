@@ -100,7 +100,9 @@ Sıfırdan sunucu kurulumu, güvenlik ve dallanma akışı için: **[docs/DEPLOY
 - [x] **Faz 2 — NodeLink entegrasyonu:** ses sunucusu kurulumu, ses kanalına bağlanma, `/play`
 - [x] **Faz 3 — Çekirdek müzik:** `/skip`, `/pause`, `/resume`, `/stop`, `/queue`, `/nowplaying`
 - [x] **Faz 4 — Kullanıcı deneyimi:** kontrol butonları, playlist desteği, otomatik ayrılma
-- [ ] **Faz 5 — Süreklilik:** Docker, CI/CD, VPS'te 7/24 çalışma
+- [x] **Faz 5 — Süreklilik:** Docker, CI/CD, VPS'te 7/24 çalışma
+
+Buradan sonrası (oynatma kontrolleri, kalıcılık, web panel, …) için: **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ---
 
