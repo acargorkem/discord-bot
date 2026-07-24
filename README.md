@@ -87,7 +87,9 @@ docker compose up --build
 - **`.github/workflows/ci.yml`** — her push/PR'da tip kontrolü, lint, biçim ve derleme.
 - **`.github/workflows/deploy.yml`** — `main`'e push'ta bot imajını derleyip GHCR'a (`ghcr.io`) iter, ardından SSH ile VPS'e bağlanıp `docker compose pull && up -d` çalıştırır.
 
-Deploy için gereken **GitHub Secrets**: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (ve gerekiyorsa `VPS_PORT`). VPS'te `~/discord-bot` altında repo klonlu, `.env` dolu ve `BOT_IMAGE` ayarlı olmalı — detaylar VPS kurulum rehberinde.
+Deploy için gereken **GitHub Secrets**: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (ve gerekiyorsa `VPS_PORT`). VPS'te `~/discord-bot` altında repo klonlu, `.env` dolu ve `BOT_IMAGE` ayarlı olmalı.
+
+Sıfırdan sunucu kurulumu, güvenlik ve dallanma akışı için: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ---
 
