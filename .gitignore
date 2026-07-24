@@ -1,0 +1,16 @@
+# Bağımlılıklar ve derleme çıktısı
+node_modules/
+dist/
+
+# Ortam değişkenleri (token'lar burada — asla commit'lenmez)
+.env
+.env.local
+
+# NodeLink ses sunucusu (ayrı olarak klonlanır)
+nodelink/
+
+# Loglar ve editör dosyaları
+*.log
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,17 @@
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import prettier from "eslint-config-prettier";
+
+export default tseslint.config(
+  // Lint dışı tutulacaklar: derleme çıktısı, bağımlılıklar, ses sunucusu (bizim değil).
+  { ignores: ["dist/", "node_modules/", "nodelink/"] },
+
+  // Temel JavaScript kuralları.
+  js.configs.recommended,
+
+  // TypeScript için önerilen kurallar.
+  ...tseslint.configs.recommended,
+
+  // Prettier ile çakışan biçimlendirme kurallarını kapatır (en sonda olmalı).
+  prettier,
+);
