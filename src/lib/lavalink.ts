@@ -1,6 +1,13 @@
 import type { Client } from "discord.js";
-import { LavalinkManager } from "lavalink-client";
+import { LavalinkManager, type Player } from "lavalink-client";
 import { config } from "../config.js";
+import { nowPlayingEmbed, playerControls } from "./ui.js";
+
+/** Bir oynatıcıya bağlı son "şimdi çalıyor" mesajının konumu. */
+interface NowPlayingRef {
+  channelId: string;
+  messageId: string;
+}
 
 /**
  * NodeLink ses sunucusuna bağlanan lavalink-client yöneticisini oluşturur,
@@ -59,18 +66,47 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
 
   // --- Oynatıcı / parça olayları ---
   lavalink
-    .on("trackStart", (player, track) => {
+    .on("trackStart", async (player, track) => {
+      // Önceki "şimdi çalıyor" mesajının butonlarını devre dışı bırak.
+      await clearNowPlayingControls(client, player);
+
       const channel = client.channels.cache.get(player.textChannelId ?? "");
-      if (channel?.isSendable()) {
-        void channel.send(
-          `🎶 Şimdi çalıyor: **${track?.info.title ?? "Bilinmeyen parça"}**`,
-        );
-      }
+      if (!channel?.isSendable() || !track) return;
+
+      const message = await channel.send({
+        embeds: [nowPlayingEmbed(track)],
+        components: [playerControls(false)],
+      });
+      player.set("npMessage", {
+        channelId: message.channelId,
+        messageId: message.id,
+      } satisfies NowPlayingRef);
     })
-    .on("queueEnd", (player) => {
+    .on("queueEnd", async (player) => {
+      await clearNowPlayingControls(client, player);
       const channel = client.channels.cache.get(player.textChannelId ?? "");
       if (channel?.isSendable()) {
         void channel.send("✅ Kuyruk bitti. Yeni parça eklemezsen birazdan ayrılırım.");
       }
     });
+}
+
+/**
+ * Bir önceki "şimdi çalıyor" mesajındaki butonları kaldırır (parça değişince
+ * veya kuyruk bitince eski butonların işlevsiz kalmaması için).
+ */
+async function clearNowPlayingControls(client: Client, player: Player): Promise<void> {
+  const ref = player.get("npMessage") as NowPlayingRef | undefined;
+  if (!ref) return;
+  player.set("npMessage", undefined);
+
+  try {
+    const channel = client.channels.cache.get(ref.channelId);
+    if (channel?.isSendable()) {
+      const message = await channel.messages.fetch(ref.messageId);
+      await message.edit({ components: [] });
+    }
+  } catch {
+    // Mesaj silinmiş olabilir; sorun değil.
+  }
 }

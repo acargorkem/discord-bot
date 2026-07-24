@@ -9,6 +9,8 @@ import {
 } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
+import { setupAutoLeave } from "./lib/autoLeave.js";
+import { handleMusicButton } from "./lib/buttons.js";
 import { createLavalink } from "./lib/lavalink.js";
 import type { Command } from "./types.js";
 
@@ -25,6 +27,9 @@ client.lavalink = createLavalink(client);
 client.on(Events.Raw, (packet) => {
   client.lavalink.sendRawData(packet);
 });
+
+// Kanal boşalınca otomatik ayrılma.
+setupAutoLeave(client);
 
 // Komutları isme göre hızlı erişim için bir haritaya koy.
 const commandMap = new Collection<string, Command>();
@@ -60,6 +65,14 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Müzik kontrol butonları.
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith("music:")) {
+      await handleMusicButton(interaction);
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const command = commandMap.get(interaction.commandName);
