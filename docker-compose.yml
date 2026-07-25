@@ -31,8 +31,15 @@ services:
       LAVALINK_HOST: "nodelink"
       LAVALINK_PORT: "4000"
       LAVALINK_PASSWORD: "${NODELINK_PASSWORD:-youshallnotpass}"
+      DB_PATH: "/app/data/bot.db"
+    volumes:
+      # SQLite veritabanı kalıcı olsun (deploy'lar arası silinmez).
+      - bot-data:/app/data
     restart: unless-stopped
     networks: [botnet]
+
+volumes:
+  bot-data:
 
 networks:
   botnet:

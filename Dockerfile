@@ -26,6 +26,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 
+# SQLite veritabanı dizini — volume mount'unda node kullanıcısı yazabilsin.
+RUN mkdir -p /app/data && chown node:node /app/data
+
 # Sağlık kontrolü: bot Discord'a bağlıysa /health 200 döner.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -q -O- http://localhost:3000/health || exit 1

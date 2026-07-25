@@ -11,6 +11,7 @@ import queue from "./queue.js";
 import remove from "./remove.js";
 import resume from "./resume.js";
 import seek from "./seek.js";
+import settings from "./settings.js";
 import shuffle from "./shuffle.js";
 import skip from "./skip.js";
 import skipto from "./skipto.js";
@@ -39,4 +40,5 @@ export const commands: Command[] = [
   skipto,
   move,
   previous,
+  settings,
 ];

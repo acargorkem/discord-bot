@@ -9,6 +9,9 @@ dist/
 # NodeLink ses sunucusu (ayrı olarak klonlanır)
 nodelink/
 
+# SQLite veritabanı (yerel)
+data/
+
 # Loglar ve editör dosyaları
 *.log
 .DS_Store
