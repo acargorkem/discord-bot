@@ -35,3 +35,36 @@ jobs:
 
       - name: Derleme
         run: npm run build
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Bağımlılıkları yükle
+        run: npm ci
+
+      - name: Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Tip kontrolü
+        run: npm run check
+
+      - name: Bileşen testleri
+        run: npm run test
+
+      - name: E2E testleri
+        run: npm run test:e2e
+
+      - name: Derleme
+        run: npm run build
