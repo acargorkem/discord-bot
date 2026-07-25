@@ -30,5 +30,8 @@ jobs:
       - name: Biçim kontrolü
         run: npm run format:check
 
+      - name: Test
+        run: npm run test
+
       - name: Derleme
         run: npm run build
