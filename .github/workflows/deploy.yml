@@ -30,7 +30,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Bot imajını derle ve it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -41,7 +41,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Web (Caddy) imajını derle ve it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./web
           push: true
