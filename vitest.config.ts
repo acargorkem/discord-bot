@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -6,5 +6,7 @@ export default defineConfig({
     env: {
       DB_PATH: ":memory:",
     },
+    // web/ kendi test kurulumuna (vitest-browser-svelte) sahip; kökte tarama.
+    exclude: [...configDefaults.exclude, "web/**"],
   },
 });
