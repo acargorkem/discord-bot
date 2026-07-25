@@ -34,7 +34,7 @@
     "@hono/valibot-validator": "^0.6.1",
     "arctic": "^3.7.0",
     "discord.js": "^14.16.3",
-    "dotenv": "^16.4.7",
+    "dotenv": "^17.4.2",
     "hono": "^4.12.32",
     "lavalink-client": "^2.10.3",
     "pino": "^10.3.1",
