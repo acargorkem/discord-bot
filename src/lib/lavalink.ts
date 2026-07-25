@@ -1,6 +1,7 @@
 import type { Client } from "discord.js";
 import { LavalinkManager, type Player } from "lavalink-client";
 import { config } from "../config.js";
+import { botEvents } from "./events.js";
 import { recordPlay } from "./history.js";
 import { logger } from "./logger.js";
 import { sqliteQueueStore } from "./queueStore.js";
@@ -159,9 +160,13 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
         channelId: message.channelId,
         messageId: message.id,
       } satisfies NowPlayingRef);
+
+      // Web paneline canlı güncelleme sinyali.
+      botEvents.emit("stateChanged");
     })
     .on("queueEnd", async (player) => {
       await clearNowPlayingControls(client, player);
+      botEvents.emit("stateChanged");
       const channel = client.channels.cache.get(player.textChannelId ?? "");
       if (channel?.isSendable()) {
         void channel.send("✅ Kuyruk bitti. Yeni parça eklemezsen birazdan ayrılırım.");
@@ -170,6 +175,7 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
     .on("playerDestroy", (player) => {
       // Oynatıcı yok edilince kurtarma kaydını da temizle.
       deletePlayerSession(player.guildId);
+      botEvents.emit("stateChanged");
     });
 }
 
