@@ -89,7 +89,7 @@ docker compose up --build
 
 Deploy için gereken **GitHub Secrets**: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (ve gerekiyorsa `VPS_PORT`). VPS'te `~/discord-bot` altında repo klonlu, `.env` dolu ve `BOT_IMAGE` ayarlı olmalı.
 
-Sıfırdan sunucu kurulumu, güvenlik ve dallanma akışı için: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Sıfırdan sunucu kurulumu, güvenlik ve dallanma akışı için: **[docs/DEPLOY.md](docs/DEPLOY.md)**. Web panelini domain'e bağlamak için: **[docs/PANEL_DEPLOY.md](docs/PANEL_DEPLOY.md)**.
 
 ---
 

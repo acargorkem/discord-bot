@@ -1,0 +1,18 @@
+# Domain PANEL_DOMAIN env değişkeninden gelir. Caddy Let's Encrypt ile
+# otomatik HTTPS sağlar. /api ve /ws bota proxy'lenir; gerisi SPA'dır.
+{$PANEL_DOMAIN} {
+	encode gzip
+
+	# API ve WebSocket → bot (iç ağ, port 3000)
+	@backend path /api/* /ws
+	handle @backend {
+		reverse_proxy bot:3000
+	}
+
+	# Statik SPA (Svelte) — bilinmeyen yollar index.html'e düşer
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
