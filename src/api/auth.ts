@@ -32,6 +32,14 @@ function currentSession(c: Parameters<MiddlewareHandler>[0]) {
   return id ? getSession(id) : null;
 }
 
+/** İstek bağlamındaki oturum kullanıcısını döner (yoksa null). */
+export function sessionUser(
+  c: Parameters<MiddlewareHandler>[0],
+): { id: string; username: string } | null {
+  const session = currentSession(c);
+  return session ? { id: session.userId, username: session.username } : null;
+}
+
 /** Oturum yoksa 401 döndüren middleware. */
 export const requireAuth: MiddlewareHandler = async (c, next) => {
   if (!currentSession(c)) {

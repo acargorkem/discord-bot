@@ -4,6 +4,7 @@ import { createApiApp } from "./app";
 import type { AuthConfig, OAuthProvider } from "./auth";
 import type { ControlService } from "./controlService";
 import type { MusicService, NowPlaying, QueueTrackView } from "./musicService";
+import type { PanelService } from "./panelService";
 import { createRateLimit } from "./rateLimit";
 import { createSession } from "./sessions";
 
@@ -18,6 +19,15 @@ const okControl: ControlService = {
   stop: async () => ({ ok: true, message: "ok" }),
   setVolume: async () => ({ ok: true, message: "ok" }),
   seek: async () => ({ ok: true, message: "ok" }),
+};
+
+const okPanel: PanelService = {
+  listPlaylists: () => [],
+  savePlaylist: () => ({ ok: true, message: "ok" }),
+  loadPlaylist: async () => ({ ok: true, message: "ok" }),
+  deletePlaylist: () => true,
+  getSettings: () => ({ defaultVolume: 100 }),
+  setDefaultVolume: () => {},
 };
 
 const CSRF_ORIGIN = "http://localhost";
@@ -48,6 +58,7 @@ function makeApp(
   opts: {
     service?: Partial<MusicService>;
     control?: Partial<ControlService>;
+    panel?: Partial<PanelService>;
     isReady?: boolean;
     provider?: OAuthProvider;
     allowedUserIds?: string[];
@@ -69,6 +80,7 @@ function makeApp(
   return createApiApp({
     service,
     control: { ...okControl, ...opts.control },
+    panel: { ...okPanel, ...opts.panel },
     isReady: () => opts.isReady ?? true,
     auth,
     rateLimit: opts.rateLimit ?? passThrough,
@@ -233,5 +245,83 @@ describe("kontrol uçları", () => {
     const second = await app.request("/api/control/pause", { method: "POST", headers });
     expect(first.status).toBe(200);
     expect(second.status).toBe(429);
+  });
+});
+
+describe("playlist ve ayar uçları", () => {
+  it("GET /api/playlists oturumsuz → 401", async () => {
+    const res = await makeApp().request("/api/playlists");
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/playlists oturumla → liste", async () => {
+    const res = await makeApp({
+      panel: { listPlaylists: () => [{ name: "favoriler", trackCount: 3 }] },
+    }).request("/api/playlists", { headers: { Cookie: authedCookie() } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      playlists: [{ name: "favoriler", trackCount: 3 }],
+    });
+  });
+
+  it("POST /api/playlists geçerli isim → kaydeder", async () => {
+    const save = vi.fn(() => ({ ok: true, message: "kaydedildi" }));
+    const res = await makeApp({ panel: { savePlaylist: save } }).request(
+      "/api/playlists",
+      {
+        method: "POST",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "yeni" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(save).toHaveBeenCalledWith("owner-1", "yeni");
+  });
+
+  it("POST /api/playlists boş isim (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/playlists", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE /api/playlists/:name → siler", async () => {
+    const res = await makeApp({ panel: { deletePlaylist: () => true } }).request(
+      "/api/playlists/favoriler",
+      { method: "DELETE", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("GET /api/settings oturumla → varsayılan ses", async () => {
+    const res = await makeApp({
+      panel: { getSettings: () => ({ defaultVolume: 80 }) },
+    }).request("/api/settings", { headers: { Cookie: authedCookie() } });
+    expect(await res.json()).toEqual({ defaultVolume: 80 });
+  });
+
+  it("PUT /api/settings geçerli → 200", async () => {
+    const setVol = vi.fn();
+    const res = await makeApp({ panel: { setDefaultVolume: setVol } }).request(
+      "/api/settings",
+      {
+        method: "PUT",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultVolume: 90 }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(setVol).toHaveBeenCalledWith(90);
+  });
+
+  it("PUT /api/settings geçersiz değer → 400", async () => {
+    const res = await makeApp().request("/api/settings", {
+      method: "PUT",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultVolume: 999 }),
+    });
+    expect(res.status).toBe(400);
   });
 });

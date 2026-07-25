@@ -11,6 +11,7 @@ import { createBroadcaster } from "./broadcaster.js";
 import { createControlService } from "./controlService.js";
 import { createDiscordProvider, generateState } from "./discordOAuth.js";
 import { createMusicService, type MusicService } from "./musicService.js";
+import { createPanelService } from "./panelService.js";
 import { createRateLimit } from "./rateLimit.js";
 import { getSession } from "./sessions.js";
 
@@ -48,6 +49,7 @@ export function startApiServer(client: Client): void {
   const app = createApiApp({
     service,
     control: createControlService(client.lavalink, config.guildId),
+    panel: createPanelService(client.lavalink, config.guildId),
     isReady: () => client.isReady(),
     auth: {
       provider: createDiscordProvider(),
