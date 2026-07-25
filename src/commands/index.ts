@@ -6,6 +6,7 @@ import nowplaying from "./nowplaying.js";
 import pause from "./pause.js";
 import ping from "./ping.js";
 import play from "./play.js";
+import playlist from "./playlist.js";
 import previous from "./previous.js";
 import queue from "./queue.js";
 import remove from "./remove.js";
@@ -41,4 +42,5 @@ export const commands: Command[] = [
   move,
   previous,
   settings,
+  playlist,
 ];
