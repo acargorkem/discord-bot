@@ -48,6 +48,25 @@ db.exec(`
     uri TEXT,
     played_at INTEGER NOT NULL
   );
+
+  -- Genel amaçlı anahtar-değer (ör. NodeLink sessionId).
+  CREATE TABLE IF NOT EXISTS kv (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  -- Oturum kurtarma için oyuncu başına Discord kanal bilgileri.
+  CREATE TABLE IF NOT EXISTS player_sessions (
+    guild_id TEXT PRIMARY KEY,
+    voice_channel_id TEXT NOT NULL,
+    text_channel_id TEXT
+  );
+
+  -- lavalink-client queueStore: sunucu başına kuyruğun JSON hâli.
+  CREATE TABLE IF NOT EXISTS queue_store (
+    guild_id TEXT PRIMARY KEY,
+    data TEXT NOT NULL
+  );
 `);
 
 logger.info(`Veritabanı hazır: ${dbPath}`);
