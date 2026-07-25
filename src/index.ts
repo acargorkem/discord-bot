@@ -12,6 +12,7 @@ import { commands } from "./commands/index.js";
 import { setupAutoLeave } from "./lib/autoLeave.js";
 import { handleMusicButton } from "./lib/buttons.js";
 import { createLavalink } from "./lib/lavalink.js";
+import { logger } from "./lib/logger.js";
 import type { Command } from "./types.js";
 
 // Bota hangi olayları dinleyeceğini söyleyen "intent"ler.
@@ -47,11 +48,11 @@ async function deployCommands(): Promise<void> {
   await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), {
     body,
   });
-  console.log(`✅ ${commands.length} slash komutu sunucuya yüklendi.`);
+  logger.info(`${commands.length} slash komutu sunucuya yüklendi.`);
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`🎵 Giriş yapıldı: ${readyClient.user.tag}`);
+  logger.info(`Giriş yapıldı: ${readyClient.user.tag}`);
   // Ses yöneticisini başlat — bu, NodeLink node'una bağlanmayı tetikler.
   await client.lavalink.init({
     id: readyClient.user.id,
@@ -60,7 +61,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     await deployCommands();
   } catch (error) {
-    console.error("Komutlar kaydedilirken hata:", error);
+    logger.error({ err: error }, "Komutlar kaydedilirken hata");
   }
 });
 
@@ -81,7 +82,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (error) {
-    console.error(`"${interaction.commandName}" komutu çalışırken hata:`, error);
+    logger.error(
+      { err: error, command: interaction.commandName },
+      "Komut çalışırken hata",
+    );
     const content = "Komut çalıştırılırken bir hata oluştu 😞";
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content, flags: MessageFlags.Ephemeral });

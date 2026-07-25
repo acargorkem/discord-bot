@@ -1,6 +1,7 @@
 import type { Client } from "discord.js";
 import { LavalinkManager, type Player } from "lavalink-client";
 import { config } from "../config.js";
+import { logger } from "./logger.js";
 import { nowPlayingEmbed, playerControls } from "./ui.js";
 
 /** Bir oynatıcıya bağlı son "şimdi çalıyor" mesajının konumu. */
@@ -55,13 +56,13 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
   // --- Node (NodeLink bağlantısı) olayları ---
   lavalink.nodeManager
     .on("connect", (node) => {
-      console.log(`🔗 NodeLink'e bağlanıldı: ${node.id}`);
+      logger.info(`NodeLink'e bağlanıldı: ${node.id}`);
     })
     .on("disconnect", (node, reason) => {
-      console.warn(`⚠️  NodeLink bağlantısı kesildi (${node.id}):`, reason);
+      logger.warn({ reason }, `NodeLink bağlantısı kesildi: ${node.id}`);
     })
     .on("error", (node, error) => {
-      console.error(`❌ NodeLink hatası (${node.id}):`, error.message);
+      logger.error({ err: error }, `NodeLink hatası: ${node.id}`);
     });
 
   // --- Oynatıcı / parça olayları ---

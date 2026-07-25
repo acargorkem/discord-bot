@@ -12,6 +12,14 @@ export default tseslint.config(
   // TypeScript için önerilen kurallar.
   ...tseslint.configs.recommended,
 
+  // Proje kuralları.
+  {
+    rules: {
+      // Loglama için pino kullan (src/lib/logger.ts); console'a düşme.
+      "no-console": "error",
+    },
+  },
+
   // Prettier ile çakışan biçimlendirme kurallarını kapatır (en sonda olmalı).
   prettier,
 );
