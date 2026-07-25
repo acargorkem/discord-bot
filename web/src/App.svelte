@@ -12,7 +12,9 @@
   } from "./lib/api";
   import Controls from "./lib/components/Controls.svelte";
   import NowPlayingCard from "./lib/components/NowPlaying.svelte";
+  import Playlists from "./lib/components/Playlists.svelte";
   import Queue from "./lib/components/Queue.svelte";
+  import Settings from "./lib/components/Settings.svelte";
   import { initTheme, setTheme } from "./lib/theme";
 
   let me = $state<Me | null>(null);
@@ -93,6 +95,18 @@
             Kuyruk
           </h2>
           <Queue {queue} />
+        </section>
+        <section class="card">
+          <h2 class="text-sm font-semibold text-[var(--muted)] mb-3 uppercase tracking-wide">
+            Playlistler
+          </h2>
+          <Playlists />
+        </section>
+        <section class="card">
+          <h2 class="text-sm font-semibold text-[var(--muted)] mb-3 uppercase tracking-wide">
+            Ayarlar
+          </h2>
+          <Settings />
         </section>
       </div>
     {/if}
