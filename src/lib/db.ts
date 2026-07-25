@@ -67,6 +67,14 @@ db.exec(`
     guild_id TEXT PRIMARY KEY,
     data TEXT NOT NULL
   );
+
+  -- Web paneli oturumları (sunucu-taraflı; tarayıcıda yalnızca opak id).
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
 `);
 
 logger.info(`Veritabanı hazır: ${dbPath}`);
