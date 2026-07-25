@@ -11,6 +11,8 @@ import { config } from "./config.js";
 import { commands } from "./commands/index.js";
 import { setupAutoLeave } from "./lib/autoLeave.js";
 import { handleMusicButton } from "./lib/buttons.js";
+import { checkCooldown } from "./lib/cooldown.js";
+import { startHealthServer } from "./lib/health.js";
 import { createLavalink } from "./lib/lavalink.js";
 import { logger } from "./lib/logger.js";
 import type { Command } from "./types.js";
@@ -31,6 +33,9 @@ client.on(Events.Raw, (packet) => {
 
 // Kanal boşalınca otomatik ayrılma.
 setupAutoLeave(client);
+
+// Docker healthcheck için minik sağlık sunucusu.
+startHealthServer(client);
 
 // Komutları isme göre hızlı erişim için bir haritaya koy.
 const commandMap = new Collection<string, Command>();
@@ -78,6 +83,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
+
+  const remainingMs = checkCooldown(interaction.user.id, interaction.commandName);
+  if (remainingMs > 0) {
+    await interaction.reply({
+      content: `Biraz yavaş 🐢 ${Math.ceil(remainingMs / 1000)} sn sonra tekrar dene.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   try {
     await command.execute(interaction);
