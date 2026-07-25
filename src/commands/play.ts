@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js";
+import { getDefaultVolume } from "../lib/settings.js";
 import type { Command } from "../types.js";
 
 const play: Command = {
@@ -36,7 +37,7 @@ const play: Command = {
         voiceChannelId,
         textChannelId: interaction.channelId,
         selfDeaf: true,
-        volume: 100,
+        volume: getDefaultVolume(interaction.guildId),
       });
 
     if (!player.connected) {

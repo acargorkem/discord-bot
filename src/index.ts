@@ -9,9 +9,12 @@ import {
 } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
+import { startApiServer } from "./api/server.js";
 import { setupAutoLeave } from "./lib/autoLeave.js";
 import { handleMusicButton } from "./lib/buttons.js";
+import { checkCooldown } from "./lib/cooldown.js";
 import { createLavalink } from "./lib/lavalink.js";
+import { logger } from "./lib/logger.js";
 import type { Command } from "./types.js";
 
 // Bota hangi olayları dinleyeceğini söyleyen "intent"ler.
@@ -31,6 +34,9 @@ client.on(Events.Raw, (packet) => {
 // Kanal boşalınca otomatik ayrılma.
 setupAutoLeave(client);
 
+// API sunucusu (sağlık + salt-okunur müzik uçları).
+startApiServer(client);
+
 // Komutları isme göre hızlı erişim için bir haritaya koy.
 const commandMap = new Collection<string, Command>();
 for (const command of commands) {
@@ -47,11 +53,11 @@ async function deployCommands(): Promise<void> {
   await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), {
     body,
   });
-  console.log(`✅ ${commands.length} slash komutu sunucuya yüklendi.`);
+  logger.info(`${commands.length} slash komutu sunucuya yüklendi.`);
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`🎵 Giriş yapıldı: ${readyClient.user.tag}`);
+  logger.info(`Giriş yapıldı: ${readyClient.user.tag}`);
   // Ses yöneticisini başlat — bu, NodeLink node'una bağlanmayı tetikler.
   await client.lavalink.init({
     id: readyClient.user.id,
@@ -60,7 +66,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     await deployCommands();
   } catch (error) {
-    console.error("Komutlar kaydedilirken hata:", error);
+    logger.error({ err: error }, "Komutlar kaydedilirken hata");
   }
 });
 
@@ -78,10 +84,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
 
+  const remainingMs = checkCooldown(interaction.user.id, interaction.commandName);
+  if (remainingMs > 0) {
+    await interaction.reply({
+      content: `Biraz yavaş 🐢 ${Math.ceil(remainingMs / 1000)} sn sonra tekrar dene.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   try {
     await command.execute(interaction);
   } catch (error) {
-    console.error(`"${interaction.commandName}" komutu çalışırken hata:`, error);
+    logger.error(
+      { err: error, command: interaction.commandName },
+      "Komut çalışırken hata",
+    );
     const content = "Komut çalıştırılırken bir hata oluştu 😞";
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content, flags: MessageFlags.Ephemeral });

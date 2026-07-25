@@ -2,6 +2,7 @@ import type {
   ChatInputCommandInteraction,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
+  SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js";
 import type { LavalinkManager } from "lavalink-client";
 
@@ -18,6 +19,9 @@ declare module "discord.js" {
  * ne olacağını belirten bir `execute` fonksiyonu.
  */
 export interface Command {
-  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
+  data:
+    | SlashCommandBuilder
+    | SlashCommandOptionsOnlyBuilder
+    | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void> | void;
 }

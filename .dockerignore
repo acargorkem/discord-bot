@@ -16,6 +16,9 @@ dist
 # NodeLink kaynağı (compose'da hazır imaj olarak kullanılıyor)
 nodelink
 
+# Yerel SQLite veritabanı
+data
+
 # Diğer
 *.log
 .claude

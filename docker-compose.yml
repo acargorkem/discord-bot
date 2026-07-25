@@ -31,8 +31,37 @@ services:
       LAVALINK_HOST: "nodelink"
       LAVALINK_PORT: "4000"
       LAVALINK_PASSWORD: "${NODELINK_PASSWORD:-youshallnotpass}"
+      DB_PATH: "/app/data/bot.db"
+    volumes:
+      # SQLite veritabanı kalıcı olsun (deploy'lar arası silinmez).
+      - bot-data:/app/data
     restart: unless-stopped
     networks: [botnet]
+
+  # Web paneli: Caddy statik SPA'yı sunar + /api ve /ws'i bota proxy'ler (otomatik HTTPS).
+  # PANEL_DOMAIN .env'de tanımlı olmalı. Panel kullanmıyorsan bu servisi silebilirsin.
+  caddy:
+    image: ${WEB_IMAGE:-discord-panel:local}
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: caddy
+    depends_on: [bot]
+    environment:
+      PANEL_DOMAIN: "${PANEL_DOMAIN}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    networks: [botnet]
+
+volumes:
+  bot-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   botnet:

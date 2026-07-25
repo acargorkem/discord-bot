@@ -34,4 +34,22 @@ export const config = {
     port: Number(optional("LAVALINK_PORT", "4000")),
     password: optional("LAVALINK_PASSWORD", "youshallnotpass"),
   },
+
+  /** Web paneli (Discord OAuth2) — yalnızca panel kullanılırken gerekir. */
+  panel: {
+    clientSecret: optional("DISCORD_CLIENT_SECRET", ""),
+    redirectUri: optional(
+      "OAUTH_REDIRECT_URI",
+      "http://localhost:3000/api/auth/callback",
+    ),
+    // Panele girebilecek Discord kullanıcı ID'leri (virgülle ayrılmış).
+    allowedUserIds: optional("PANEL_ALLOWED_USER_IDS", "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+    // Üretimde (HTTPS) true olmalı; yerelde http için false.
+    cookieSecure: optional("PANEL_COOKIE_SECURE", "false") === "true",
+    // Panelin herkese açık origin'i (CSRF kontrolü için). Üretimde https + domain.
+    origin: optional("PANEL_ORIGIN", "http://localhost:3000"),
+  },
 } as const;
