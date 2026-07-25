@@ -1,6 +1,7 @@
 import type { Client } from "discord.js";
 import { LavalinkManager, type Player } from "lavalink-client";
 import { config } from "../config.js";
+import { recordPlay } from "./history.js";
 import { logger } from "./logger.js";
 import { nowPlayingEmbed, playerControls } from "./ui.js";
 
@@ -68,6 +69,14 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
   // --- Oynatıcı / parça olayları ---
   lavalink
     .on("trackStart", async (player, track) => {
+      // Çalınan parçayı geçmişe kaydet (istatistikler için).
+      recordPlay(
+        player.guildId,
+        (track?.requester as { id?: string } | undefined)?.id ?? null,
+        track?.info.title ?? "Bilinmeyen parça",
+        track?.info.uri ?? null,
+      );
+
       // Önceki "şimdi çalıyor" mesajının butonlarını devre dışı bırak.
       await clearNowPlayingControls(client, player);
 

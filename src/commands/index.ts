@@ -16,6 +16,7 @@ import settings from "./settings.js";
 import shuffle from "./shuffle.js";
 import skip from "./skip.js";
 import skipto from "./skipto.js";
+import stats from "./stats.js";
 import stop from "./stop.js";
 import volume from "./volume.js";
 
@@ -43,4 +44,5 @@ export const commands: Command[] = [
   previous,
   settings,
   playlist,
+  stats,
 ];
