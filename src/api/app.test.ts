@@ -1,8 +1,26 @@
-import { describe, expect, it } from "vitest";
+import type { MiddlewareHandler } from "hono";
+import { describe, expect, it, vi } from "vitest";
 import { createApiApp } from "./app";
 import type { AuthConfig, OAuthProvider } from "./auth";
+import type { ControlService } from "./controlService";
 import type { MusicService, NowPlaying, QueueTrackView } from "./musicService";
+import { createRateLimit } from "./rateLimit";
 import { createSession } from "./sessions";
+
+const passThrough: MiddlewareHandler = async (_c, next) => {
+  await next();
+};
+
+const okControl: ControlService = {
+  pause: async () => ({ ok: true, message: "ok" }),
+  resume: async () => ({ ok: true, message: "ok" }),
+  skip: async () => ({ ok: true, message: "ok" }),
+  stop: async () => ({ ok: true, message: "ok" }),
+  setVolume: async () => ({ ok: true, message: "ok" }),
+  seek: async () => ({ ok: true, message: "ok" }),
+};
+
+const CSRF_ORIGIN = "http://localhost";
 
 const SAMPLE_NOW_PLAYING: NowPlaying = {
   title: "Test Şarkı",
@@ -29,9 +47,11 @@ const fakeProvider: OAuthProvider = {
 function makeApp(
   opts: {
     service?: Partial<MusicService>;
+    control?: Partial<ControlService>;
     isReady?: boolean;
     provider?: OAuthProvider;
     allowedUserIds?: string[];
+    rateLimit?: MiddlewareHandler;
   } = {},
 ) {
   const service: MusicService = {
@@ -46,7 +66,19 @@ function makeApp(
     cookieSecure: false,
     panelUrl: "/panel",
   };
-  return createApiApp({ service, isReady: () => opts.isReady ?? true, auth });
+  return createApiApp({
+    service,
+    control: { ...okControl, ...opts.control },
+    isReady: () => opts.isReady ?? true,
+    auth,
+    rateLimit: opts.rateLimit ?? passThrough,
+    csrfOrigin: CSRF_ORIGIN,
+  });
+}
+
+/** Kontrol uçları için oturum + doğru Origin başlığı taşıyan istek başlıkları. */
+function controlHeaders(): Record<string, string> {
+  return { Cookie: authedCookie(), Origin: CSRF_ORIGIN };
 }
 
 /** İzinli kullanıcı için geçerli bir oturum cookie'si üretir. */
@@ -141,5 +173,65 @@ describe("API app", () => {
   it("güvenlik başlıklarını ekler", async () => {
     const res = await makeApp().request("/health");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+});
+
+describe("kontrol uçları", () => {
+  it("oturumsuz → 401", async () => {
+    const res = await makeApp().request("/api/control/pause", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("yanlış Origin (CSRF) → 403", async () => {
+    const res = await makeApp().request("/api/control/pause", {
+      method: "POST",
+      headers: { Cookie: authedCookie(), Origin: "http://evil.example" },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("geçerli istek → eylemi çalıştırır", async () => {
+    const skip = vi.fn(async () => ({ ok: true, message: "geçildi" }));
+    const res = await makeApp({ control: { skip } }).request("/api/control/skip", {
+      method: "POST",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(200);
+    expect(skip).toHaveBeenCalledOnce();
+  });
+
+  it("eylem başarısızsa → 409", async () => {
+    const res = await makeApp({
+      control: { pause: async () => ({ ok: false, message: "yok" }) },
+    }).request("/api/control/pause", { method: "POST", headers: controlHeaders() });
+    expect(res.status).toBe(409);
+  });
+
+  it("geçerli ses değeri → 200", async () => {
+    const res = await makeApp().request("/api/control/volume", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ volume: 80 }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("geçersiz ses değeri (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/control/volume", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ volume: 999 }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rate limit aşılınca → 429", async () => {
+    const app = makeApp({ rateLimit: createRateLimit({ windowMs: 60_000, max: 1 }) });
+    // Aynı oturum (aynı cookie) ile ardışık iki istek.
+    const headers = { Cookie: authedCookie(), Origin: CSRF_ORIGIN };
+    const first = await app.request("/api/control/pause", { method: "POST", headers });
+    const second = await app.request("/api/control/pause", { method: "POST", headers });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
   });
 });

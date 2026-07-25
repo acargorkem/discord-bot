@@ -49,5 +49,7 @@ export const config = {
       .filter(Boolean),
     // Üretimde (HTTPS) true olmalı; yerelde http için false.
     cookieSecure: optional("PANEL_COOKIE_SECURE", "false") === "true",
+    // Panelin herkese açık origin'i (CSRF kontrolü için). Üretimde https + domain.
+    origin: optional("PANEL_ORIGIN", "http://localhost:3000"),
   },
 } as const;

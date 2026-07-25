@@ -8,8 +8,10 @@ import { botEvents } from "../lib/events.js";
 import { logger } from "../lib/logger.js";
 import { createApiApp } from "./app.js";
 import { createBroadcaster } from "./broadcaster.js";
+import { createControlService } from "./controlService.js";
 import { createDiscordProvider, generateState } from "./discordOAuth.js";
 import { createMusicService, type MusicService } from "./musicService.js";
+import { createRateLimit } from "./rateLimit.js";
 import { getSession } from "./sessions.js";
 
 /** WebSocket ve API'nin paylaştığı anlık durum görünümü. */
@@ -45,6 +47,7 @@ export function startApiServer(client: Client): void {
 
   const app = createApiApp({
     service,
+    control: createControlService(client.lavalink, config.guildId),
     isReady: () => client.isReady(),
     auth: {
       provider: createDiscordProvider(),
@@ -53,6 +56,8 @@ export function startApiServer(client: Client): void {
       cookieSecure: config.panel.cookieSecure,
       panelUrl: "/",
     },
+    rateLimit: createRateLimit({ windowMs: 10_000, max: 30 }),
+    csrfOrigin: config.panel.origin,
   });
 
   const server = serve({ fetch: app.fetch, port }, (info) => {
