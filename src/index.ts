@@ -9,10 +9,10 @@ import {
 } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
+import { startApiServer } from "./api/server.js";
 import { setupAutoLeave } from "./lib/autoLeave.js";
 import { handleMusicButton } from "./lib/buttons.js";
 import { checkCooldown } from "./lib/cooldown.js";
-import { startHealthServer } from "./lib/health.js";
 import { createLavalink } from "./lib/lavalink.js";
 import { logger } from "./lib/logger.js";
 import type { Command } from "./types.js";
@@ -34,8 +34,8 @@ client.on(Events.Raw, (packet) => {
 // Kanal boşalınca otomatik ayrılma.
 setupAutoLeave(client);
 
-// Docker healthcheck için minik sağlık sunucusu.
-startHealthServer(client);
+// API sunucusu (sağlık + salt-okunur müzik uçları).
+startApiServer(client);
 
 // Komutları isme göre hızlı erişim için bir haritaya koy.
 const commandMap = new Collection<string, Command>();
