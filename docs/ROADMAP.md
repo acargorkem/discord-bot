@@ -58,6 +58,8 @@ Yeni özelliklerden önce zemini güçlendir.
 
 Botu bir web uygulamasından yönetmek: giriş yap, çalan şarkıyı/kuyruğu gör, ses/playlist/tüm kontroller. Botun üstüne tam bir full-stack uygulama — en büyük tek özellik. **Kalıcılık (Aşama C) sonrası** yapılması önerilir.
 
+> Detaylı plan (stack, güvenlik, test, UI/UX, fazlar): **[WEB_PANEL_PLAN.md](WEB_PANEL_PLAN.md)**
+
 ### Mimari
 
 - **Giriş:** Discord OAuth2 ("Discord ile giriş"); kimlik + sunucu üyeliği ile yetkilendirme.
