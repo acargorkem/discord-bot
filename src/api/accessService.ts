@@ -47,14 +47,18 @@ export function createAccessService(
     async listMembers() {
       const guild = getGuild();
       if (!guild) return [];
-      // Üye listesi GuildMembers (privileged) intent'i gerektirir; kapalıysa
-      // veya fetch başarısızsa panel çökmesin diye boş liste dön.
-      let members;
-      try {
-        members = await guild.members.fetch();
-      } catch {
-        return [];
+      // Üye listesi GuildMembers (privileged) intent'i gerektirir ve gateway
+      // fetch'i ara sıra boş/başarısız dönebiliyor. Birkaç kez dene, son çare
+      // olarak cache'e düş; panel çökmesin diye asla throw etme.
+      let members = null;
+      for (let attempt = 0; attempt < 3 && !members?.size; attempt++) {
+        try {
+          members = await guild.members.fetch();
+        } catch {
+          // sonraki denemeye geç
+        }
       }
+      if (!members?.size) members = guild.members.cache;
       return [...members.values()]
         .filter((member) => !member.user.bot)
         .map((member) => ({

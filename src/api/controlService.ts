@@ -1,4 +1,6 @@
 import type { Client } from "discord.js";
+import type { RepeatMode } from "lavalink-client";
+import { isShuffle, promoteRandomNext, SHUFFLE_KEY } from "../lib/shuffle.js";
 
 export interface ControlResult {
   ok: boolean;
@@ -18,6 +20,16 @@ export interface ControlService {
   seek(positionMs: number): Promise<ControlResult>;
   /** Şarkı adı/link ile arayıp kuyruğa ekler (bot bir kanaldaysa). */
   play(query: string): Promise<ControlResult>;
+  /** Bir önceki parçaya döner. */
+  previous(): Promise<ControlResult>;
+  /** Karışık çalmayı açar/kapatır; yeni durumu döner. */
+  toggleShuffle(): Promise<ControlResult & { shuffle: boolean }>;
+  /** Tekrar modunu ayarlar (off/track/queue). */
+  setRepeat(mode: RepeatMode): Promise<ControlResult>;
+  /** Kuyrukta bir parçayı başka konuma taşır. */
+  moveTrack(from: number, to: number): Promise<ControlResult>;
+  /** Kuyruktan bir parçayı kaldırır. */
+  removeTrack(index: number): Promise<ControlResult>;
 }
 
 const NOTHING_PLAYING: ControlResult = { ok: false, message: "Çalan bir şey yok." };
@@ -93,6 +105,59 @@ export function createControlService(client: Client, guildId: string): ControlSe
           ? `Playlist eklendi: ${result.playlist?.title ?? "playlist"} (${result.tracks.length} parça)`
           : `Kuyruğa eklendi: ${result.tracks[0].info.title}`;
       return { ok: true, message };
+    },
+    async previous() {
+      const player = getPlayer();
+      if (!player) return NOTHING_PLAYING;
+      const prev = player.queue.previous?.[0];
+      if (!prev) return { ok: false, message: "Önceki parça yok." };
+      // Şu anki parçayı kaybetmemek için sıraya geri koy, sonra öncekini öne al.
+      const current = player.queue.current;
+      if (current) await player.queue.add(current, 0);
+      await player.queue.add(prev, 0);
+      await player.skip(0, false);
+      return { ok: true, message: "Önceki parçaya dönüldü." };
+    },
+    async toggleShuffle() {
+      const player = getPlayer();
+      if (!player) return { ...NOTHING_PLAYING, shuffle: false };
+      const on = !isShuffle(player);
+      player.set(SHUFFLE_KEY, on);
+      // Açarken bir sonraki geçişi hemen rastgele yap.
+      if (on) await promoteRandomNext(player);
+      return {
+        ok: true,
+        shuffle: on,
+        message: on ? "Karışık çalma açık." : "Karışık çalma kapalı.",
+      };
+    },
+    async setRepeat(mode) {
+      const player = getPlayer();
+      if (!player) return NOTHING_PLAYING;
+      await player.setRepeatMode(mode);
+      const label = mode === "off" ? "kapalı" : mode === "track" ? "parça" : "kuyruk";
+      return { ok: true, message: `Tekrar: ${label}.` };
+    },
+    async moveTrack(from, to) {
+      const player = getPlayer();
+      if (!player) return NOTHING_PLAYING;
+      const size = player.queue.tracks.length;
+      if (from < 0 || from >= size || to < 0 || to >= size) {
+        return { ok: false, message: "Geçersiz konum." };
+      }
+      if (from === to) return { ok: true, message: "Sıra değişmedi." };
+      const picked = await player.queue.splice(from, 1);
+      if (picked) await player.queue.add(picked, to);
+      return { ok: true, message: "Sıra değişti." };
+    },
+    async removeTrack(index) {
+      const player = getPlayer();
+      if (!player) return NOTHING_PLAYING;
+      if (index < 0 || index >= player.queue.tracks.length) {
+        return { ok: false, message: "Geçersiz konum." };
+      }
+      await player.queue.splice(index, 1);
+      return { ok: true, message: "Parça kuyruktan kaldırıldı." };
     },
   };
 }

@@ -1,12 +1,15 @@
 import type { LavalinkManager, Track } from "lavalink-client";
 import {
   addTrackToPlaylist,
+  createEmptyPlaylist,
   deletePlaylist,
   getPlaylistTracks,
   listPlaylists,
   loadPlaylist,
+  moveTrackInPlaylist,
   type PlaylistSummary,
   removeTrackFromPlaylist,
+  renamePlaylist,
   savePlaylist,
 } from "../lib/playlists.js";
 import { getDefaultVolume, setDefaultVolume } from "../lib/settings.js";
@@ -41,6 +44,12 @@ export interface PanelService {
   addToPlaylist(ownerId: string, name: string, query: string): Promise<PanelResult>;
   /** Playlistten verilen konumdaki parçayı siler. */
   removeFromPlaylist(ownerId: string, name: string, position: number): PanelResult;
+  /** Boş bir playlist oluşturur. */
+  createPlaylist(ownerId: string, name: string): PanelResult;
+  /** Bir playlisti yeniden adlandırır. */
+  renamePlaylist(ownerId: string, name: string, newName: string): PanelResult;
+  /** Playlistte bir parçayı başka konuma taşır. */
+  movePlaylistTrack(ownerId: string, name: string, from: number, to: number): PanelResult;
   getSettings(): { defaultVolume: number };
   setDefaultVolume(volume: number): void;
 }
@@ -123,6 +132,24 @@ export function createPanelService(
       return removed
         ? { ok: true, message: "Parça silindi." }
         : { ok: false, message: "Parça bulunamadı." };
+    },
+
+    createPlaylist(ownerId, name) {
+      return createEmptyPlaylist(guildId, ownerId, name)
+        ? { ok: true, message: "Playlist oluşturuldu." }
+        : { ok: false, message: "Bu isimde bir playlist zaten var." };
+    },
+
+    renamePlaylist(ownerId, name, newName) {
+      return renamePlaylist(guildId, ownerId, name, newName)
+        ? { ok: true, message: "Yeniden adlandırıldı." }
+        : { ok: false, message: "Bu isimde bir playlist zaten var." };
+    },
+
+    movePlaylistTrack(ownerId, name, from, to) {
+      return moveTrackInPlaylist(guildId, ownerId, name, from, to)
+        ? { ok: true, message: "Sıra değişti." }
+        : { ok: false, message: "Taşıma başarısız." };
     },
 
     getSettings: () => ({ defaultVolume: getDefaultVolume(guildId) }),

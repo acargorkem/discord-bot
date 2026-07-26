@@ -12,7 +12,9 @@ import type { PanelService } from "./panelService.js";
 import {
   grantSchema,
   joinSchema,
+  moveSchema,
   playSchema,
+  repeatSchema,
   savePlaylistSchema,
   seekSchema,
   settingsSchema,
@@ -101,6 +103,32 @@ export function createApiApp(deps: ApiDeps): Hono {
   app.post("/api/control/play", ...guards, vValidator("json", playSchema), async (c) =>
     controlResponse(c, await deps.control.play(c.req.valid("json").query)),
   );
+  app.post("/api/control/previous", ...guards, async (c) =>
+    controlResponse(c, await deps.control.previous()),
+  );
+  app.post("/api/control/shuffle", ...guards, async (c) =>
+    controlResponse(c, await deps.control.toggleShuffle()),
+  );
+  app.post(
+    "/api/control/repeat",
+    ...guards,
+    vValidator("json", repeatSchema),
+    async (c) =>
+      controlResponse(c, await deps.control.setRepeat(c.req.valid("json").mode)),
+  );
+
+  // --- Korumalı: kuyruk düzenleme ---
+  app.post("/api/queue/move", ...guards, vValidator("json", moveSchema), async (c) => {
+    const { from, to } = c.req.valid("json");
+    return controlResponse(c, await deps.control.moveTrack(from, to));
+  });
+  app.delete("/api/queue/:index", ...guards, async (c) => {
+    const index = Number(c.req.param("index"));
+    if (!Number.isInteger(index) || index < 0) {
+      return c.json({ error: "invalid_index" }, 400);
+    }
+    return controlResponse(c, await deps.control.removeTrack(index));
+  });
 
   // --- Korumalı: playlist ---
   app.get("/api/playlists", requireAuth, (c) => {
@@ -166,6 +194,47 @@ export function createApiApp(deps: ApiDeps): Hono {
     const result = deps.panel.removeFromPlaylist(user.id, c.req.param("name"), position);
     return c.json(result, result.ok ? 200 : 404);
   });
+
+  app.post(
+    "/api/playlists/empty",
+    ...guards,
+    vValidator("json", savePlaylistSchema),
+    (c) => {
+      const user = sessionUser(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      const result = deps.panel.createPlaylist(user.id, c.req.valid("json").name);
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.patch(
+    "/api/playlists/:name",
+    ...guards,
+    vValidator("json", savePlaylistSchema),
+    (c) => {
+      const user = sessionUser(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      const result = deps.panel.renamePlaylist(
+        user.id,
+        c.req.param("name"),
+        c.req.valid("json").name,
+      );
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.post(
+    "/api/playlists/:name/tracks/move",
+    ...guards,
+    vValidator("json", moveSchema),
+    (c) => {
+      const user = sessionUser(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      const { from, to } = c.req.valid("json");
+      const result = deps.panel.movePlaylistTrack(user.id, c.req.param("name"), from, to);
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
 
   // --- Korumalı: ses kanalı yönetimi ---
   app.get("/api/channels", requireAuth, (c) =>
