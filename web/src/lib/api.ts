@@ -93,6 +93,46 @@ export async function deletePlaylist(name: string): Promise<void> {
   await fetch(`/api/playlists/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
+export interface PlaylistTrack {
+  position: number;
+  title: string;
+  author: string | null;
+  uri: string | null;
+  duration: number | null;
+}
+
+/** Bir playlistin parçalarını döner. */
+export async function fetchPlaylistTracks(name: string): Promise<PlaylistTrack[]> {
+  const res = await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`);
+  if (!res.ok) return [];
+  return ((await res.json()) as { tracks: PlaylistTrack[] }).tracks;
+}
+
+/** Arama sorgusuyla bulunan parçayı playliste ekler. Sonuç mesajını döner. */
+export async function addToPlaylist(name: string, query: string): Promise<PlayResult> {
+  const res = await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  try {
+    const data = (await res.json()) as Partial<PlayResult>;
+    if (typeof data.message === "string") {
+      return { ok: data.ok === true, message: data.message };
+    }
+  } catch {
+    // JSON değilse aşağıya düş.
+  }
+  return { ok: false, message: "İstek gönderilemedi." };
+}
+
+/** Playlistten verilen konumdaki parçayı siler. */
+export async function removeFromPlaylist(name: string, position: number): Promise<void> {
+  await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks/${position}`, {
+    method: "DELETE",
+  });
+}
+
 export interface Settings {
   defaultVolume: number;
 }

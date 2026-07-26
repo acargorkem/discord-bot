@@ -118,6 +118,42 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json({ ok }, ok ? 200 : 404);
   });
 
+  // --- Korumalı: playlist içeriği (parça ekle/çıkar/listele) ---
+  app.get("/api/playlists/:name/tracks", requireAuth, (c) => {
+    const user = sessionUser(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    const tracks = deps.panel.getPlaylistTracks(user.id, c.req.param("name"));
+    if (tracks === null) return c.json({ error: "not_found" }, 404);
+    return c.json({ tracks });
+  });
+
+  app.post(
+    "/api/playlists/:name/tracks",
+    ...guards,
+    vValidator("json", playSchema),
+    async (c) => {
+      const user = sessionUser(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      const result = await deps.panel.addToPlaylist(
+        user.id,
+        c.req.param("name"),
+        c.req.valid("json").query,
+      );
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.delete("/api/playlists/:name/tracks/:position", ...guards, (c) => {
+    const user = sessionUser(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    const position = Number(c.req.param("position"));
+    if (!Number.isInteger(position) || position < 0) {
+      return c.json({ error: "invalid_position" }, 400);
+    }
+    const result = deps.panel.removeFromPlaylist(user.id, c.req.param("name"), position);
+    return c.json(result, result.ok ? 200 : 404);
+  });
+
   // --- Korumalı: ses kanalı yönetimi ---
   app.get("/api/channels", requireAuth, (c) =>
     c.json({

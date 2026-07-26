@@ -28,6 +28,9 @@ const okPanel: PanelService = {
   savePlaylist: () => ({ ok: true, message: "ok" }),
   loadPlaylist: async () => ({ ok: true, message: "ok" }),
   deletePlaylist: () => true,
+  getPlaylistTracks: () => [],
+  addToPlaylist: async () => ({ ok: true, message: "ok" }),
+  removeFromPlaylist: () => ({ ok: true, message: "ok" }),
   getSettings: () => ({ defaultVolume: 100 }),
   setDefaultVolume: () => {},
 };
@@ -326,6 +329,85 @@ describe("playlist ve ayar uçları", () => {
       { method: "DELETE", headers: controlHeaders() },
     );
     expect(res.status).toBe(200);
+  });
+
+  it("GET /api/playlists/:name/tracks oturumla → parça listesi", async () => {
+    const res = await makeApp({
+      panel: {
+        getPlaylistTracks: () => [
+          {
+            position: 0,
+            title: "A",
+            author: "X",
+            uri: "https://open.spotify.com/track/1",
+            duration: 1000,
+          },
+        ],
+      },
+    }).request("/api/playlists/favoriler/tracks", {
+      headers: { Cookie: authedCookie() },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      tracks: [
+        {
+          position: 0,
+          title: "A",
+          author: "X",
+          uri: "https://open.spotify.com/track/1",
+          duration: 1000,
+        },
+      ],
+    });
+  });
+
+  it("GET /api/playlists/:name/tracks yok → 404", async () => {
+    const res = await makeApp({ panel: { getPlaylistTracks: () => null } }).request(
+      "/api/playlists/yok/tracks",
+      { headers: { Cookie: authedCookie() } },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /api/playlists/:name/tracks geçerli sorgu → ekler", async () => {
+    const add = vi.fn(async () => ({ ok: true, message: "eklendi", count: 1 }));
+    const res = await makeApp({ panel: { addToPlaylist: add } }).request(
+      "/api/playlists/favoriler/tracks",
+      {
+        method: "POST",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "gojira silvera" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(add).toHaveBeenCalledWith("owner-1", "favoriler", "gojira silvera");
+  });
+
+  it("POST /api/playlists/:name/tracks boş sorgu (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/playlists/favoriler/tracks", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "  " }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE /api/playlists/:name/tracks/:position → siler", async () => {
+    const remove = vi.fn(() => ({ ok: true, message: "silindi" }));
+    const res = await makeApp({ panel: { removeFromPlaylist: remove } }).request(
+      "/api/playlists/favoriler/tracks/2",
+      { method: "DELETE", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+    expect(remove).toHaveBeenCalledWith("owner-1", "favoriler", 2);
+  });
+
+  it("DELETE /api/playlists/:name/tracks/:position geçersiz konum → 400", async () => {
+    const res = await makeApp().request("/api/playlists/favoriler/tracks/abc", {
+      method: "DELETE",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(400);
   });
 
   it("GET /api/settings oturumla → varsayılan ses", async () => {
