@@ -27,6 +27,12 @@ export interface StateMessage {
   type: "state";
   nowPlaying: NowPlaying | null;
   queue: QueueTrack[];
+  channelId: string | null;
+}
+
+export interface VoiceChannel {
+  id: string;
+  name: string;
 }
 
 /** Giriş yapmış kullanıcıyı döner; oturum yoksa null. */
@@ -102,6 +108,50 @@ export async function updateSettings(defaultVolume: number): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ defaultVolume }),
   });
+}
+
+export async function fetchChannels(): Promise<{
+  channels: VoiceChannel[];
+  current: string | null;
+}> {
+  const res = await fetch("/api/channels");
+  if (!res.ok) return { channels: [], current: null };
+  return (await res.json()) as { channels: VoiceChannel[]; current: string | null };
+}
+
+export async function joinChannel(channelId: string): Promise<void> {
+  await fetch("/api/control/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channelId }),
+  });
+}
+
+export async function leaveChannel(): Promise<void> {
+  await fetch("/api/control/leave", { method: "POST" });
+}
+
+export interface PlayResult {
+  ok: boolean;
+  message: string;
+}
+
+/** Şarkı adı/link ile arayıp kuyruğa ekler. Sonuç mesajını döner. */
+export async function playTrack(query: string): Promise<PlayResult> {
+  const res = await fetch("/api/control/play", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  try {
+    const data = (await res.json()) as Partial<PlayResult>;
+    if (typeof data.message === "string") {
+      return { ok: data.ok === true, message: data.message };
+    }
+  } catch {
+    // JSON değilse aşağıdaki genel mesaja düş.
+  }
+  return { ok: false, message: "İstek gönderilemedi." };
 }
 
 /** Canlı durum yayınına bağlanır. */
