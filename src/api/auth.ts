@@ -70,21 +70,22 @@ export function createAuthRoutes(cfg: AuthConfig): Hono {
     const storedState = getCookie(c, STATE_COOKIE);
     deleteCookie(c, STATE_COOKIE, { path: "/" });
 
-    // state doğrulaması (OAuth CSRF koruması).
+    // state doğrulaması (OAuth CSRF koruması). Hatalarda panele anlaşılır bir
+    // mesajla yönlendir (ham JSON yerine).
     if (!code || !state || !storedState || state !== storedState) {
-      return c.json({ error: "invalid_state" }, 403);
+      return c.redirect(`${cfg.panelUrl}?error=invalid_state`);
     }
 
     let user: DiscordUser;
     try {
       user = await cfg.provider.handleCallback(code);
     } catch {
-      return c.json({ error: "oauth_failed" }, 502);
+      return c.redirect(`${cfg.panelUrl}?error=oauth_failed`);
     }
 
     // Yalnızca izinli kullanıcılar.
     if (!cfg.allowedUserIds.includes(user.id)) {
-      return c.json({ error: "forbidden" }, 403);
+      return c.redirect(`${cfg.panelUrl}?error=forbidden`);
     }
 
     const session = createSession(user.id, user.username);

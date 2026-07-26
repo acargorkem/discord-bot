@@ -138,11 +138,12 @@ describe("API app", () => {
     expect(res.headers.get("set-cookie")).toContain("oauth_state=test-state");
   });
 
-  it("callback: state uyuşmazsa → 403", async () => {
+  it("callback: state uyuşmazsa → panele hata ile yönlendirir", async () => {
     const res = await makeApp().request("/api/auth/callback?code=x&state=wrong", {
       headers: { Cookie: "oauth_state=test-state" },
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/panel?error=invalid_state");
   });
 
   it("callback: doğru state + izinli kullanıcı → 302 + session cookie", async () => {
@@ -154,7 +155,7 @@ describe("API app", () => {
     expect(res.headers.get("set-cookie")).toContain("session=");
   });
 
-  it("callback: izinsiz kullanıcı → 403", async () => {
+  it("callback: izinsiz kullanıcı → panele hata ile yönlendirir", async () => {
     const provider: OAuthProvider = {
       createAuthUrl: () => "x",
       handleCallback: async () => ({ id: "intruder", username: "Bad" }),
@@ -163,7 +164,8 @@ describe("API app", () => {
       "/api/auth/callback?code=x&state=test-state",
       { headers: { Cookie: "oauth_state=test-state" } },
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/panel?error=forbidden");
   });
 
   it("GET /api/auth/me oturumla → kullanıcı", async () => {
