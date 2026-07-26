@@ -1,4 +1,5 @@
-import type { LavalinkManager, Track } from "lavalink-client";
+import type { LavalinkManager, SearchPlatform, Track } from "lavalink-client";
+import { config } from "../config.js";
 import {
   addTrackToPlaylist,
   createEmptyPlaylist,
@@ -117,7 +118,10 @@ export function createPanelService(
       const node = [...lavalink.nodeManager.nodes.values()].find((n) => n.connected);
       if (!node) return { ok: false, message: "Ses sunucusuna bağlı değil." };
 
-      const result = await node.search({ query }, null);
+      const result = await node.search(
+        { query, source: config.lavalink.searchPlatform as SearchPlatform },
+        null,
+      );
       if (!result || result.loadType === "empty" || result.loadType === "error") {
         return { ok: false, message: `"${query}" için sonuç bulunamadı.` };
       }

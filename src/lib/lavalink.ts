@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import { LavalinkManager, type Player } from "lavalink-client";
+import { LavalinkManager, type Player, type SearchPlatform } from "lavalink-client";
 import { config } from "../config.js";
 import { botEvents } from "./events.js";
 import { recordPlay } from "./history.js";
@@ -57,7 +57,7 @@ export function createLavalink(client: Client): LavalinkManager {
     },
     autoSkip: true,
     playerOptions: {
-      defaultSearchPlatform: "youtube",
+      defaultSearchPlatform: config.lavalink.searchPlatform as SearchPlatform,
       onDisconnect: {
         autoReconnect: true,
         destroyPlayer: false,
