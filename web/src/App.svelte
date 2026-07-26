@@ -10,6 +10,7 @@
     type NowPlaying,
     type QueueTrack,
   } from "./lib/api";
+  import Access from "./lib/components/Access.svelte";
   import AddSong from "./lib/components/AddSong.svelte";
   import Channels from "./lib/components/Channels.svelte";
   import Controls from "./lib/components/Controls.svelte";
@@ -26,6 +27,7 @@
   let channelId = $state<string | null>(null);
   let dark = $state(false);
   let authError = $state<string | null>(null);
+  let view = $state<"dashboard" | "access">("dashboard");
   let ws: WebSocket | undefined;
 
   const errorMessages: Record<string, string> = {
@@ -73,6 +75,15 @@
     <header class="flex items-center justify-between mb-8">
       <h1 class="text-xl font-bold">🎵 Müzik Paneli</h1>
       <div class="flex items-center gap-2">
+        {#if me?.isOwner}
+          <button
+            class="icon-btn"
+            onclick={() => (view = view === "access" ? "dashboard" : "access")}
+            aria-label="Yetki yönetimi"
+          >
+            {view === "access" ? "🎛️" : "👥"}
+          </button>
+        {/if}
         <button
           class="icon-btn"
           onclick={toggleTheme}
@@ -102,6 +113,8 @@
         </p>
         <a href="/api/auth/login" class="login-btn">Discord ile giriş yap</a>
       </div>
+    {:else if view === "access"}
+      <Access />
     {:else}
       <div class="flex flex-col gap-6">
         <section class="card">
