@@ -22,10 +22,21 @@
   let nowPlaying = $state<NowPlaying | null>(null);
   let queue = $state<QueueTrack[]>([]);
   let dark = $state(false);
+  let authError = $state<string | null>(null);
   let ws: WebSocket | undefined;
+
+  const errorMessages: Record<string, string> = {
+    forbidden: "Bu Discord hesabı panele erişim için yetkili değil.",
+    invalid_state: "Oturum doğrulaması başarısız oldu. Lütfen tekrar dene.",
+    oauth_failed: "Discord ile giriş sırasında bir sorun oldu. Tekrar dene.",
+  };
 
   onMount(() => {
     dark = initTheme();
+    // Girişten dönen hata (ör. yetkisiz hesap) varsa yakala, URL'yi temizle.
+    const params = new URLSearchParams(location.search);
+    authError = params.get("error");
+    if (authError) history.replaceState(null, "", location.pathname);
     void (async () => {
       me = await fetchMe();
       loading = false;
@@ -77,6 +88,11 @@
       <p class="text-[var(--muted)]">Yükleniyor…</p>
     {:else if !me}
       <div class="flex flex-col items-center gap-6 py-20 text-center">
+        {#if authError}
+          <p class="error-msg">
+            {errorMessages[authError] ?? "Bir sorun oldu, tekrar dene."}
+          </p>
+        {/if}
         <p class="text-[var(--muted)]">
           Botu yönetmek için Discord ile giriş yap.
         </p>
@@ -135,5 +151,13 @@
     border-radius: 0.7rem;
     font-weight: 600;
     text-decoration: none;
+  }
+  .error-msg {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid var(--danger);
+    padding: 0.7rem 1rem;
+    border-radius: 0.7rem;
+    max-width: 24rem;
   }
 </style>
