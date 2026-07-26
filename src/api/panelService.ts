@@ -12,7 +12,12 @@ import {
   renamePlaylist,
   savePlaylist,
 } from "../lib/playlists.js";
-import { getDefaultVolume, setDefaultVolume } from "../lib/settings.js";
+import {
+  getDefaultVolume,
+  getKeepPlayingAlone,
+  setDefaultVolume,
+  setKeepPlayingAlone,
+} from "../lib/settings.js";
 
 export interface PanelResult {
   ok: boolean;
@@ -50,8 +55,9 @@ export interface PanelService {
   renamePlaylist(ownerId: string, name: string, newName: string): PanelResult;
   /** Playlistte bir parçayı başka konuma taşır. */
   movePlaylistTrack(ownerId: string, name: string, from: number, to: number): PanelResult;
-  getSettings(): { defaultVolume: number };
+  getSettings(): { defaultVolume: number; keepPlayingAlone: boolean };
   setDefaultVolume(volume: number): void;
+  setKeepPlayingAlone(keep: boolean): void;
 }
 
 export function createPanelService(
@@ -152,7 +158,11 @@ export function createPanelService(
         : { ok: false, message: "Taşıma başarısız." };
     },
 
-    getSettings: () => ({ defaultVolume: getDefaultVolume(guildId) }),
+    getSettings: () => ({
+      defaultVolume: getDefaultVolume(guildId),
+      keepPlayingAlone: getKeepPlayingAlone(guildId),
+    }),
     setDefaultVolume: (volume) => setDefaultVolume(guildId, volume),
+    setKeepPlayingAlone: (keep) => setKeepPlayingAlone(guildId, keep),
   };
 }
