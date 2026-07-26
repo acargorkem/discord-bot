@@ -22,6 +22,11 @@ services:
       # YouTube bu datacenter IP'sinden bloklanıyorsa komple kapatmak için
       # .env'de NODELINK_YT_ENABLED=false yap (Spotify vb. sesi soundcloud/deezer'dan çeker).
       NODELINK_SOURCES_YOUTUBE_ENABLED: "${NODELINK_YT_ENABLED:-true}"
+      # Arama kaynakları — YouTube kapatılırsa buradan da çıkarılmalı, yoksa
+      # NodeLink "kapalı kaynağa referans" diye başlamayı reddeder. YouTube'u
+      # kapatınca .env'de NODELINK_SEARCH_SOURCES=soundcloud yap.
+      NODELINK_DEFAULTSEARCHSOURCE: "${NODELINK_SEARCH_SOURCES:-youtube,soundcloud}"
+      NODELINK_UNIFIEDSEARCHSOURCES: "${NODELINK_SEARCH_SOURCES:-youtube,soundcloud}"
     restart: unless-stopped
     networks: [botnet]
 
