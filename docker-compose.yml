@@ -19,6 +19,9 @@ services:
       # çıkan refresh token'ı .env'deki NODELINK_YT_REFRESH_TOKEN'e koy, OAUTH'u false yap.
       NODELINK_SOURCES_YOUTUBE_GETOAUTHTOKEN: "${NODELINK_YT_OAUTH:-false}"
       NODELINK_SOURCES_YOUTUBE_CLIENTS_SETTINGS_TV_REFRESHTOKEN: "${NODELINK_YT_REFRESH_TOKEN:-}"
+      # YouTube bu datacenter IP'sinden bloklanıyorsa komple kapatmak için
+      # .env'de NODELINK_YT_ENABLED=false yap (Spotify vb. sesi soundcloud/deezer'dan çeker).
+      NODELINK_SOURCES_YOUTUBE_ENABLED: "${NODELINK_YT_ENABLED:-true}"
     restart: unless-stopped
     networks: [botnet]
 
