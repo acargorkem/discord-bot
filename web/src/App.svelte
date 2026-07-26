@@ -31,7 +31,7 @@
   let dark = $state(false);
   let authError = $state<string | null>(null);
   let view = $state<"dashboard" | "access">("dashboard");
-  let ws: WebSocket | undefined;
+  let ws: ReturnType<typeof connectState> | undefined;
 
   const errorMessages: Record<string, string> = {
     forbidden: "Bu Discord hesabı panele erişim için yetkili değil.",

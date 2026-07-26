@@ -301,13 +301,45 @@ export async function revokeAccess(userId: string): Promise<void> {
   await fetch(`/api/access/${encodeURIComponent(userId)}`, { method: "DELETE" });
 }
 
-/** Canlı durum yayınına bağlanır. */
-export function connectState(onState: (state: StateMessage) => void): WebSocket {
-  const protocol = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${protocol}://${location.host}/ws`);
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data as string) as StateMessage;
-    if (data.type === "state") onState(data);
+export interface StateConnection {
+  close(): void;
+}
+
+/**
+ * Canlı durum yayınına bağlanır ve bağlantı koparsa (deploy, ağ, proxy timeout)
+ * artan gecikmeyle otomatik yeniden bağlanır — böylece panel gerçek durumla
+ * senkron kalır. Yeniden bağlanınca sunucu güncel durumu tekrar gönderir.
+ */
+export function connectState(onState: (state: StateMessage) => void): StateConnection {
+  let ws: WebSocket | null = null;
+  let stopped = false;
+  let attempts = 0;
+
+  function open() {
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${protocol}://${location.host}/ws`);
+    ws.onopen = () => {
+      attempts = 0;
+    };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data as string) as StateMessage;
+      if (data.type === "state") onState(data);
+    };
+    ws.onclose = () => {
+      if (stopped) return;
+      const delay = Math.min(1000 * 2 ** attempts, 15000);
+      attempts += 1;
+      setTimeout(open, delay);
+    };
+    ws.onerror = () => ws?.close();
+  }
+
+  open();
+
+  return {
+    close() {
+      stopped = true;
+      ws?.close();
+    },
   };
-  return ws;
 }
