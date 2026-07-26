@@ -1,4 +1,5 @@
 import { type Client, Events } from "discord.js";
+import { getKeepPlayingAlone } from "./settings.js";
 
 /** Kanal boşaldıktan sonra ayrılmadan önce beklenecek süre. */
 const LEAVE_DELAY_MS = 60_000;
@@ -23,6 +24,16 @@ export function setupAutoLeave(client: Client): void {
     const guildId = oldState.guild.id;
     const player = client.lavalink.getPlayer(guildId);
     if (!player?.voiceChannelId) return;
+
+    // Ayar açıksa bot yalnız kalsa da çalmaya devam eder; hiç ayrılma.
+    if (getKeepPlayingAlone(guildId)) {
+      const pending = leaveTimers.get(guildId);
+      if (pending) {
+        clearTimeout(pending);
+        leaveTimers.delete(guildId);
+      }
+      return;
+    }
 
     const humans = countHumans(client, guildId, player.voiceChannelId);
     const pendingTimer = leaveTimers.get(guildId);

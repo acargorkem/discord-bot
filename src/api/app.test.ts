@@ -40,8 +40,9 @@ const okPanel: PanelService = {
   createPlaylist: () => ({ ok: true, message: "ok" }),
   renamePlaylist: () => ({ ok: true, message: "ok" }),
   movePlaylistTrack: () => ({ ok: true, message: "ok" }),
-  getSettings: () => ({ defaultVolume: 100 }),
+  getSettings: () => ({ defaultVolume: 100, keepPlayingAlone: false }),
   setDefaultVolume: () => {},
+  setKeepPlayingAlone: () => {},
 };
 
 const okChannels: ChannelService = {
@@ -550,25 +551,26 @@ describe("playlist ve ayar uçları", () => {
     expect(movePlaylistTrack).toHaveBeenCalledWith("owner-1", "favoriler", 3, 1);
   });
 
-  it("GET /api/settings oturumla → varsayılan ses", async () => {
+  it("GET /api/settings oturumla → ayarlar", async () => {
     const res = await makeApp({
-      panel: { getSettings: () => ({ defaultVolume: 80 }) },
+      panel: { getSettings: () => ({ defaultVolume: 80, keepPlayingAlone: true }) },
     }).request("/api/settings", { headers: { Cookie: authedCookie() } });
-    expect(await res.json()).toEqual({ defaultVolume: 80 });
+    expect(await res.json()).toEqual({ defaultVolume: 80, keepPlayingAlone: true });
   });
 
-  it("PUT /api/settings geçerli → 200", async () => {
+  it("PUT /api/settings geçerli → 200 + iki ayarı da yazar", async () => {
     const setVol = vi.fn();
-    const res = await makeApp({ panel: { setDefaultVolume: setVol } }).request(
-      "/api/settings",
-      {
-        method: "PUT",
-        headers: { ...controlHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ defaultVolume: 90 }),
-      },
-    );
+    const setKeep = vi.fn();
+    const res = await makeApp({
+      panel: { setDefaultVolume: setVol, setKeepPlayingAlone: setKeep },
+    }).request("/api/settings", {
+      method: "PUT",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultVolume: 90, keepPlayingAlone: true }),
+    });
     expect(res.status).toBe(200);
     expect(setVol).toHaveBeenCalledWith(90);
+    expect(setKeep).toHaveBeenCalledWith(true);
   });
 
   it("PUT /api/settings geçersiz değer → 400", async () => {

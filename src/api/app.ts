@@ -288,7 +288,9 @@ export function createApiApp(deps: ApiDeps): Hono {
   app.get("/api/settings", requireAuth, (c) => c.json(deps.panel.getSettings()));
 
   app.put("/api/settings", ...guards, vValidator("json", settingsSchema), (c) => {
-    deps.panel.setDefaultVolume(c.req.valid("json").defaultVolume);
+    const body = c.req.valid("json");
+    deps.panel.setDefaultVolume(body.defaultVolume);
+    deps.panel.setKeepPlayingAlone(body.keepPlayingAlone);
     return c.json({ ok: true });
   });
 

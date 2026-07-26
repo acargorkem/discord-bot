@@ -188,18 +188,21 @@ export async function movePlaylistTrack(
 
 export interface Settings {
   defaultVolume: number;
+  keepPlayingAlone: boolean;
 }
 
 export async function fetchSettings(): Promise<Settings> {
   const res = await fetch("/api/settings");
-  return res.ok ? ((await res.json()) as Settings) : { defaultVolume: 100 };
+  return res.ok
+    ? ((await res.json()) as Settings)
+    : { defaultVolume: 100, keepPlayingAlone: false };
 }
 
-export async function updateSettings(defaultVolume: number): Promise<void> {
+export async function updateSettings(settings: Settings): Promise<void> {
   await fetch("/api/settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ defaultVolume }),
+    body: JSON.stringify(settings),
   });
 }
 

@@ -17,7 +17,8 @@ db.exec("PRAGMA foreign_keys = ON;");
 db.exec(`
   CREATE TABLE IF NOT EXISTS guild_settings (
     guild_id TEXT PRIMARY KEY,
-    default_volume INTEGER NOT NULL DEFAULT 100
+    default_volume INTEGER NOT NULL DEFAULT 100,
+    keep_playing_alone INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS playlists (
@@ -84,5 +85,15 @@ db.exec(`
     granted_at INTEGER NOT NULL
   );
 `);
+
+// Idempotent göç: mevcut (eski) veritabanlarına yeni kolonu ekle.
+const settingsColumns = db.prepare("PRAGMA table_info(guild_settings)").all() as {
+  name: string;
+}[];
+if (!settingsColumns.some((c) => c.name === "keep_playing_alone")) {
+  db.exec(
+    "ALTER TABLE guild_settings ADD COLUMN keep_playing_alone INTEGER NOT NULL DEFAULT 0",
+  );
+}
 
 logger.info(`Veritabanı hazır: ${dbPath}`);

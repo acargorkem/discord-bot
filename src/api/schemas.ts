@@ -18,6 +18,7 @@ export const savePlaylistSchema = v.object({
 /** PUT /api/settings gövdesi. */
 export const settingsSchema = v.object({
   defaultVolume: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(150)),
+  keepPlayingAlone: v.boolean(),
 });
 
 /** POST /api/control/join gövdesi (Discord kanal ID'si = snowflake). */
