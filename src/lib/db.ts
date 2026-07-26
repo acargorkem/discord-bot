@@ -26,6 +26,7 @@ db.exec(`
     guild_id TEXT NOT NULL,
     owner_id TEXT NOT NULL,
     name TEXT NOT NULL,
+    is_public INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     UNIQUE (guild_id, owner_id, name)
   );
@@ -94,6 +95,14 @@ if (!settingsColumns.some((c) => c.name === "keep_playing_alone")) {
   db.exec(
     "ALTER TABLE guild_settings ADD COLUMN keep_playing_alone INTEGER NOT NULL DEFAULT 0",
   );
+}
+
+// Playlist görünürlüğü (private/public) — eski DB'lere kolonu ekle.
+const playlistColumns = db.prepare("PRAGMA table_info(playlists)").all() as {
+  name: string;
+}[];
+if (!playlistColumns.some((c) => c.name === "is_public")) {
+  db.exec("ALTER TABLE playlists ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0");
 }
 
 logger.info(`Veritabanı hazır: ${dbPath}`);

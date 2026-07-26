@@ -14,24 +14,46 @@ export interface StoredTrackWithPos extends StoredTrack {
 }
 
 export interface PlaylistSummary {
+  id: number;
   name: string;
   trackCount: number;
+  isPublic: boolean;
+  ownerId: string;
 }
 
-const selectPlaylistId = db.prepare(
+export interface PlaylistMeta {
+  id: number;
+  ownerId: string;
+  name: string;
+  isPublic: boolean;
+}
+
+// --- Playlist (kimliği: id) ---
+const insertPlaylistStmt = db.prepare(
+  "INSERT INTO playlists (guild_id, owner_id, name, is_public, created_at) VALUES (?, ?, ?, 0, ?)",
+);
+const nameExistsStmt = db.prepare(
   "SELECT id FROM playlists WHERE guild_id = ? AND owner_id = ? AND name = ?",
 );
-const deletePlaylistStmt = db.prepare(
-  "DELETE FROM playlists WHERE guild_id = ? AND owner_id = ? AND name = ?",
+const metaByIdStmt = db.prepare(
+  "SELECT id, owner_id AS ownerId, name, is_public AS isPublic FROM playlists WHERE guild_id = ? AND id = ?",
 );
-const insertPlaylistStmt = db.prepare(
-  "INSERT INTO playlists (guild_id, owner_id, name, created_at) VALUES (?, ?, ?, ?)",
-);
+const deleteByIdStmt = db.prepare("DELETE FROM playlists WHERE id = ?");
+const renameByIdStmt = db.prepare("UPDATE playlists SET name = ? WHERE id = ?");
+const setVisibilityStmt = db.prepare("UPDATE playlists SET is_public = ? WHERE id = ?");
+const listStmt = db.prepare(`
+  SELECT p.id AS id, p.name AS name, p.owner_id AS ownerId,
+         p.is_public AS isPublic, COUNT(t.playlist_id) AS trackCount
+  FROM playlists p
+  LEFT JOIN playlist_tracks t ON t.playlist_id = p.id
+  WHERE p.guild_id = ? AND (p.owner_id = ? OR p.is_public = 1)
+  GROUP BY p.id
+  ORDER BY p.created_at DESC
+`);
+
+// --- Parçalar (kimliği: playlist_id) ---
 const insertTrackStmt = db.prepare(
   "INSERT INTO playlist_tracks (playlist_id, position, encoded, title, uri, author, duration) VALUES (?, ?, ?, ?, ?, ?, ?)",
-);
-const renamePlaylistStmt = db.prepare(
-  "UPDATE playlists SET name = ? WHERE guild_id = ? AND owner_id = ? AND name = ?",
 );
 const deleteAllTracksStmt = db.prepare(
   "DELETE FROM playlist_tracks WHERE playlist_id = ?",
@@ -51,92 +73,110 @@ const deleteTrackAtStmt = db.prepare(
 const shiftPositionsDownStmt = db.prepare(
   "UPDATE playlist_tracks SET position = position - 1 WHERE playlist_id = ? AND position > ?",
 );
-const listStmt = db.prepare(`
-  SELECT p.name AS name, COUNT(t.playlist_id) AS trackCount
-  FROM playlists p
-  LEFT JOIN playlist_tracks t ON t.playlist_id = p.id
-  WHERE p.guild_id = ? AND p.owner_id = ?
-  GROUP BY p.id
-  ORDER BY p.created_at DESC
-`);
 
-/** Verilen parçaları bu isimle kaydeder (aynı isim varsa üzerine yazar). */
+function insertTracks(playlistId: number, tracks: Track[]): void {
+  tracks.forEach((track, index) => {
+    insertTrackStmt.run(
+      playlistId,
+      index,
+      track.encoded ?? "",
+      track.info.title,
+      track.info.uri ?? null,
+      track.info.author ?? null,
+      track.info.duration ?? null,
+    );
+  });
+}
+
+/** Sahibin bu sunucuda bu isimde playlisti var mı? */
+function ownerHasName(guildId: string, ownerId: string, name: string): boolean {
+  return nameExistsStmt.get(guildId, ownerId, name) !== undefined;
+}
+
+/**
+ * Verilen parçalarla yeni bir playlist oluşturur (mevcut kuyruğu kaydetme).
+ * Aynı isim sahipte zaten varsa üzerine yazar. Yeni id'yi döner.
+ */
 export function savePlaylist(
   guildId: string,
   ownerId: string,
   name: string,
   tracks: Track[],
-): void {
+): number {
   db.exec("BEGIN");
   try {
-    deletePlaylistStmt.run(guildId, ownerId, name);
+    const existing = nameExistsStmt.get(guildId, ownerId, name) as
+      { id: number } | undefined;
+    if (existing) deleteByIdStmt.run(existing.id);
     const result = insertPlaylistStmt.run(guildId, ownerId, name, Date.now());
     const playlistId = Number(result.lastInsertRowid);
-
-    tracks.forEach((track, index) => {
-      insertTrackStmt.run(
-        playlistId,
-        index,
-        track.encoded ?? "",
-        track.info.title,
-        track.info.uri ?? null,
-        track.info.author ?? null,
-        track.info.duration ?? null,
-      );
-    });
-
+    insertTracks(playlistId, tracks);
     db.exec("COMMIT");
+    return playlistId;
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
 }
 
-/** Bir playlistin parçalarını döner; yoksa null. */
-export function loadPlaylist(
+/** Boş bir playlist oluşturur. Aynı isim sahipte varsa null. */
+export function createEmptyPlaylist(
   guildId: string,
   ownerId: string,
   name: string,
-): StoredTrack[] | null {
-  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
+): number | null {
+  if (ownerHasName(guildId, ownerId, name)) return null;
+  const result = insertPlaylistStmt.run(guildId, ownerId, name, Date.now());
+  return Number(result.lastInsertRowid);
+}
+
+/** Görüntüleyene açık playlistler: kendi playlistleri + başkalarının public'leri. */
+export function listPlaylists(guildId: string, viewerId: string): PlaylistSummary[] {
+  const rows = listStmt.all(guildId, viewerId) as unknown as (Omit<
+    PlaylistSummary,
+    "isPublic"
+  > & { isPublic: number })[];
+  return rows.map((r) => ({ ...r, isPublic: r.isPublic === 1 }));
+}
+
+/** Sahibin bu isimdeki playlistinin id'sini döner; yoksa null (slash komut için). */
+export function findOwnedPlaylistId(
+  guildId: string,
+  ownerId: string,
+  name: string,
+): number | null {
+  const row = nameExistsStmt.get(guildId, ownerId, name) as { id: number } | undefined;
+  return row ? row.id : null;
+}
+
+/** Playlist üst verisi (izin kontrolü için); yoksa null. */
+export function getPlaylistMeta(guildId: string, id: number): PlaylistMeta | null {
+  const row = metaByIdStmt.get(guildId, id) as
+    { id: number; ownerId: string; name: string; isPublic: number } | undefined;
   if (!row) return null;
-  return selectTracksStmt.all(row.id) as unknown as StoredTrack[];
+  return {
+    id: row.id,
+    ownerId: row.ownerId,
+    name: row.name,
+    isPublic: row.isPublic === 1,
+  };
 }
 
-/** Kullanıcının bu sunucudaki playlistlerini (parça sayısıyla) listeler. */
-export function listPlaylists(guildId: string, ownerId: string): PlaylistSummary[] {
-  return listStmt.all(guildId, ownerId) as unknown as PlaylistSummary[];
+/** Yükleme için parçalar (encoded). */
+export function getTracksForLoad(id: number): StoredTrack[] {
+  return selectTracksStmt.all(id) as unknown as StoredTrack[];
 }
 
-/** Bir playlisti siler; silindiyse true döner. */
-export function deletePlaylist(guildId: string, ownerId: string, name: string): boolean {
-  const result = deletePlaylistStmt.run(guildId, ownerId, name);
-  return Number(result.changes) > 0;
+/** Parçalar (konumlarıyla). */
+export function getPlaylistTracks(id: number): StoredTrackWithPos[] {
+  return selectTracksWithPosStmt.all(id) as unknown as StoredTrackWithPos[];
 }
 
-/** Bir playlistin parçalarını (konumlarıyla) döner; playlist yoksa null. */
-export function getPlaylistTracks(
-  guildId: string,
-  ownerId: string,
-  name: string,
-): StoredTrackWithPos[] | null {
-  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
-  if (!row) return null;
-  return selectTracksWithPosStmt.all(row.id) as unknown as StoredTrackWithPos[];
-}
-
-/** Playlistin sonuna bir parça ekler. Playlist yoksa false. */
-export function addTrackToPlaylist(
-  guildId: string,
-  ownerId: string,
-  name: string,
-  track: Track,
-): boolean {
-  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
-  if (!row) return false;
-  const { maxPos } = maxPositionStmt.get(row.id) as { maxPos: number };
+/** Playlistin sonuna bir parça ekler. */
+export function addTrackToPlaylist(id: number, track: Track): void {
+  const { maxPos } = maxPositionStmt.get(id) as { maxPos: number };
   insertTrackStmt.run(
-    row.id,
+    id,
     maxPos + 1,
     track.encoded ?? "",
     track.info.title,
@@ -144,53 +184,36 @@ export function addTrackToPlaylist(
     track.info.author ?? null,
     track.info.duration ?? null,
   );
-  return true;
 }
 
-/** Boş bir playlist oluşturur. Aynı isim zaten varsa false. */
-export function createEmptyPlaylist(
-  guildId: string,
-  ownerId: string,
-  name: string,
-): boolean {
-  if (selectPlaylistId.get(guildId, ownerId, name)) return false;
-  insertPlaylistStmt.run(guildId, ownerId, name, Date.now());
-  return true;
+/** Verilen konumdaki parçayı siler ve konumları sıkıştırır. */
+export function removeTrackFromPlaylist(id: number, position: number): boolean {
+  db.exec("BEGIN");
+  try {
+    const result = deleteTrackAtStmt.run(id, position);
+    const removed = Number(result.changes) > 0;
+    if (removed) shiftPositionsDownStmt.run(id, position);
+    db.exec("COMMIT");
+    return removed;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
-/** Bir playlisti yeniden adlandırır. Yeni isim zaten varsa veya kaynak yoksa false. */
-export function renamePlaylist(
-  guildId: string,
-  ownerId: string,
-  name: string,
-  newName: string,
-): boolean {
-  if (name === newName) return true;
-  if (selectPlaylistId.get(guildId, ownerId, newName)) return false;
-  return Number(renamePlaylistStmt.run(newName, guildId, ownerId, name).changes) > 0;
-}
-
-/** Playlistte bir parçayı başka konuma taşır (sıralamayı yeniden yazar). */
-export function moveTrackInPlaylist(
-  guildId: string,
-  ownerId: string,
-  name: string,
-  from: number,
-  to: number,
-): boolean {
-  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
-  if (!row) return false;
-  const tracks = selectTracksWithPosStmt.all(row.id) as unknown as StoredTrackWithPos[];
+/** Playlistte bir parçayı başka konuma taşır. */
+export function moveTrackInPlaylist(id: number, from: number, to: number): boolean {
+  const tracks = selectTracksWithPosStmt.all(id) as unknown as StoredTrackWithPos[];
   if (from < 0 || from >= tracks.length || to < 0 || to >= tracks.length) return false;
   if (from === to) return true;
   const [moved] = tracks.splice(from, 1);
   tracks.splice(to, 0, moved);
   db.exec("BEGIN");
   try {
-    deleteAllTracksStmt.run(row.id);
+    deleteAllTracksStmt.run(id);
     tracks.forEach((track, index) => {
       insertTrackStmt.run(
-        row.id,
+        id,
         index,
         track.encoded,
         track.title,
@@ -207,25 +230,23 @@ export function moveTrackInPlaylist(
   }
 }
 
-/** Verilen konumdaki parçayı siler ve kalan konumları sıkıştırır. */
-export function removeTrackFromPlaylist(
+/** Playlisti yeniden adlandırır. Yeni isim sahipte zaten varsa false. */
+export function renamePlaylist(
   guildId: string,
   ownerId: string,
-  name: string,
-  position: number,
+  id: number,
+  newName: string,
 ): boolean {
-  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
-  if (!row) return false;
-  db.exec("BEGIN");
-  try {
-    const result = deleteTrackAtStmt.run(row.id, position);
-    const removed = Number(result.changes) > 0;
-    // Konumların 0..n-1 aralığında bitişik kalması için üsttekileri kaydır.
-    if (removed) shiftPositionsDownStmt.run(row.id, position);
-    db.exec("COMMIT");
-    return removed;
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  if (ownerHasName(guildId, ownerId, newName)) return false;
+  return Number(renameByIdStmt.run(newName, id).changes) > 0;
+}
+
+/** Görünürlüğü ayarlar (public/private). */
+export function setPlaylistVisibility(id: number, isPublic: boolean): void {
+  setVisibilityStmt.run(isPublic ? 1 : 0, id);
+}
+
+/** Bir playlisti siler (parçalar CASCADE ile gider). */
+export function deletePlaylist(id: number): boolean {
+  return Number(deleteByIdStmt.run(id).changes) > 0;
 }

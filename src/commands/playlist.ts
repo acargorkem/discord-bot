@@ -2,8 +2,9 @@ import { EmbedBuilder, MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { Track } from "lavalink-client";
 import {
   deletePlaylist,
+  findOwnedPlaylistId,
+  getTracksForLoad,
   listPlaylists,
-  loadPlaylist,
   savePlaylist,
 } from "../lib/playlists.js";
 import { getDefaultVolume } from "../lib/settings.js";
@@ -73,8 +74,9 @@ const playlist: Command = {
           await interaction.reply("Önce bir ses kanalına girmen gerekiyor. 🎧");
           return;
         }
-        const stored = loadPlaylist(guildId, ownerId, name);
-        if (!stored || stored.length === 0) {
+        const playlistId = findOwnedPlaylistId(guildId, ownerId, name);
+        const stored = playlistId !== null ? getTracksForLoad(playlistId) : [];
+        if (stored.length === 0) {
           await interaction.reply(`**${name}** adında (dolu) bir playlist bulunamadı.`);
           return;
         }
@@ -106,7 +108,9 @@ const playlist: Command = {
       }
 
       case "list": {
-        const playlists = listPlaylists(guildId, ownerId);
+        const playlists = listPlaylists(guildId, ownerId).filter(
+          (p) => p.ownerId === ownerId,
+        );
         if (playlists.length === 0) {
           await interaction.reply({
             content: "Henüz playlistin yok. `/playlist save` ile oluştur.",
@@ -126,7 +130,8 @@ const playlist: Command = {
 
       case "delete": {
         const name = interaction.options.getString("isim", true);
-        const deleted = deletePlaylist(guildId, ownerId, name);
+        const playlistId = findOwnedPlaylistId(guildId, ownerId, name);
+        const deleted = playlistId !== null && deletePlaylist(playlistId);
         await interaction.reply(
           deleted ? `🗑️ **${name}** silindi.` : `**${name}** bulunamadı.`,
         );

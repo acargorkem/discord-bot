@@ -14,6 +14,7 @@
     removeFromPlaylist,
     renamePlaylist,
     savePlaylist,
+    setPlaylistVisibility,
   } from "../api";
   import { detectMove } from "../dnd";
   import Icon from "./Icon.svelte";
@@ -23,8 +24,8 @@
   let playlists = $state<Playlist[]>([]);
   let newName = $state("");
   let topStatus = $state<string | null>(null);
-  let expanded = $state<string | null>(null);
-  let renaming = $state<string | null>(null);
+  let expanded = $state<number | null>(null);
+  let renaming = $state<number | null>(null);
   let renameValue = $state("");
   let addQuery = $state("");
   let addStatus = $state<string | null>(null);
@@ -40,22 +41,22 @@
   }
   onMount(refresh);
 
-  async function loadTracks(name: string) {
-    const tracks = await fetchPlaylistTracks(name);
+  async function loadTracks(id: number) {
+    const tracks = await fetchPlaylistTracks(id);
     items = tracks.map((t) => ({ ...t, id: t.position, origIndex: t.position }));
   }
 
-  async function toggle(name: string) {
-    if (expanded === name) {
+  async function toggle(id: number) {
+    if (expanded === id) {
       expanded = null;
       items = [];
       return;
     }
-    expanded = name;
+    expanded = id;
     addQuery = "";
     addStatus = null;
     renaming = null;
-    await loadTracks(name);
+    await loadTracks(id);
   }
 
   async function createEmpty() {
@@ -72,38 +73,41 @@
   async function saveFromQueue() {
     const name = newName.trim();
     if (!name) return;
-    await savePlaylist(name);
-    newName = "";
-    topStatus = null;
-    await refresh();
+    const res = await savePlaylist(name);
+    topStatus = res.ok ? null : res.message;
+    if (res.ok) {
+      newName = "";
+      await refresh();
+    }
   }
 
-  function startRename(name: string) {
-    renaming = name;
-    renameValue = name;
+  function startRename(pl: Playlist) {
+    renaming = pl.id;
+    renameValue = pl.name;
   }
 
-  async function doRename(name: string) {
+  async function doRename(pl: Playlist) {
     const nn = renameValue.trim();
-    if (!nn || nn === name) {
+    if (!nn || nn === pl.name) {
       renaming = null;
       return;
     }
-    const res = await renamePlaylist(name, nn);
+    const res = await renamePlaylist(pl.id, nn);
     renaming = null;
-    if (res.ok) {
-      if (expanded === name) expanded = nn;
-      await refresh();
-    } else {
-      topStatus = res.message;
-    }
+    if (res.ok) await refresh();
+    else topStatus = res.message;
+  }
+
+  async function toggleVisibility(pl: Playlist) {
+    await setPlaylistVisibility(pl.id, !pl.isPublic);
+    await refresh();
   }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const name = deleteTarget.name;
-    await deletePlaylist(name);
-    if (expanded === name) {
+    const id = deleteTarget.id;
+    await deletePlaylist(id);
+    if (expanded === id) {
       expanded = null;
       items = [];
     }
@@ -113,7 +117,7 @@
 
   async function addTrack() {
     const q = addQuery.trim();
-    if (!q || !expanded || busy) return;
+    if (!q || expanded === null || busy) return;
     busy = true;
     addStatus = null;
     const res = await addToPlaylist(expanded, q);
@@ -127,7 +131,7 @@
   }
 
   async function removeTrack(position: number) {
-    if (!expanded) return;
+    if (expanded === null) return;
     await removeFromPlaylist(expanded, position);
     await loadTracks(expanded);
     await refresh();
@@ -141,7 +145,7 @@
     items = e.detail.items;
     dragging = false;
     const move = detectMove(items.map((it) => it.origIndex));
-    if (move && expanded) {
+    if (move && expanded !== null) {
       await movePlaylistTrack(expanded, move.from, move.to);
       await loadTracks(expanded);
     }
@@ -167,20 +171,20 @@
 
   {#if playlists.length}
     <ul class="pls">
-      {#each playlists as pl (pl.name)}
+      {#each playlists as pl (pl.id)}
         <li class="pl">
           <div class="pl-head">
-            {#if renaming === pl.name}
+            {#if renaming === pl.id}
               <input
                 class="input rename"
                 bind:value={renameValue}
                 onkeydown={(e) => {
-                  if (e.key === "Enter") doRename(pl.name);
+                  if (e.key === "Enter") doRename(pl);
                   if (e.key === "Escape") renaming = null;
                 }}
                 aria-label="Yeni ad"
               />
-              <button class="mini" onclick={() => doRename(pl.name)} aria-label="Kaydet">
+              <button class="mini" onclick={() => doRename(pl)} aria-label="Kaydet">
                 <Icon name="check" size={15} />
               </button>
               <button class="mini" onclick={() => (renaming = null)} aria-label="Vazgeç">
@@ -189,75 +193,103 @@
             {:else}
               <button
                 class="expand"
-                onclick={() => toggle(pl.name)}
-                aria-expanded={expanded === pl.name}
+                onclick={() => toggle(pl.id)}
+                aria-expanded={expanded === pl.id}
                 aria-label="Aç/kapat: {pl.name}"
               >
-                <span class="chev" class:open={expanded === pl.name}>
+                <span class="chev" class:open={expanded === pl.id}>
                   <Icon name="chevron" size={16} />
                 </span>
                 <span class="pl-name">{pl.name}</span>
+                {#if pl.isPublic}
+                  <span class="pub" title="Herkese açık"><Icon name="globe" size={13} /></span>
+                {/if}
                 <span class="pl-count tabnum">{pl.trackCount} parça</span>
               </button>
               <button
                 class="mini"
-                onclick={() => loadPlaylist(pl.name)}
+                onclick={() => loadPlaylist(pl.id)}
                 aria-label="Yükle: {pl.name}"><Icon name="play" size={14} /></button
               >
-              <button
-                class="mini"
-                onclick={() => startRename(pl.name)}
-                aria-label="Yeniden adlandır: {pl.name}"><Icon name="edit" size={14} /></button
-              >
-              <button
-                class="mini danger"
-                onclick={() => (deleteTarget = pl)}
-                aria-label="Sil: {pl.name}"><Icon name="trash" size={14} /></button
-              >
+              {#if pl.isOwner}
+                <button
+                  class="mini"
+                  class:on={pl.isPublic}
+                  onclick={() => toggleVisibility(pl)}
+                  aria-label={pl.isPublic ? `Gizle: ${pl.name}` : `Herkese aç: ${pl.name}`}
+                  title={pl.isPublic ? "Herkese açık — gizle" : "Gizli — herkese aç"}
+                >
+                  <Icon name={pl.isPublic ? "globe" : "lock"} size={14} />
+                </button>
+                <button
+                  class="mini"
+                  onclick={() => startRename(pl)}
+                  aria-label="Yeniden adlandır: {pl.name}"
+                  ><Icon name="edit" size={14} /></button
+                >
+                <button
+                  class="mini danger"
+                  onclick={() => (deleteTarget = pl)}
+                  aria-label="Sil: {pl.name}"><Icon name="trash" size={14} /></button
+                >
+              {/if}
             {/if}
           </div>
 
-          {#if expanded === pl.name}
+          {#if expanded === pl.id}
             <div class="pl-body">
               {#if items.length}
-                <ul
-                  class="tracks"
-                  use:dndzone={{ items, flipDurationMs: 150, dropTargetStyle: {} }}
-                  onconsider={consider}
-                  onfinalize={finalize}
-                >
-                  {#each items as track (track.id)}
-                    <li class="trow">
-                      <span class="grip" aria-label="Taşı"><Icon name="grip" size={16} /></span>
-                      <SourceBadge uri={track.uri} />
-                      <span class="ttitle">{track.title}</span>
-                      <button
-                        class="x"
-                        onclick={() => removeTrack(track.origIndex)}
-                        aria-label="Parçayı sil: {track.title}"
-                      >
-                        <Icon name="x" size={14} />
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
+                {#if pl.isOwner}
+                  <ul
+                    class="tracks"
+                    use:dndzone={{ items, flipDurationMs: 150, dropTargetStyle: {} }}
+                    onconsider={consider}
+                    onfinalize={finalize}
+                  >
+                    {#each items as track (track.id)}
+                      <li class="trow">
+                        <span class="grip" aria-label="Taşı"><Icon name="grip" size={16} /></span>
+                        <SourceBadge uri={track.uri} />
+                        <span class="ttitle">{track.title}</span>
+                        <button
+                          class="x"
+                          onclick={() => removeTrack(track.origIndex)}
+                          aria-label="Parçayı sil: {track.title}"
+                        >
+                          <Icon name="x" size={14} />
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                {:else}
+                  <ul class="tracks">
+                    {#each items as track (track.id)}
+                      <li class="trow readonly">
+                        <SourceBadge uri={track.uri} />
+                        <span class="ttitle">{track.title}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
               {:else}
                 <p class="empty">Bu playlist boş.</p>
               {/if}
 
-              <div class="add">
-                <input
-                  class="input"
-                  placeholder="Bu listeye şarkı ekle…"
-                  bind:value={addQuery}
-                  onkeydown={(e) => e.key === "Enter" && addTrack()}
-                  aria-label="Playliste şarkı ekle"
-                />
-                <button class="btn" disabled={busy || !addQuery.trim()} onclick={addTrack}>
-                  {busy ? "…" : "Ekle"}
-                </button>
-              </div>
-              {#if addStatus}<p class="muted">{addStatus}</p>{/if}
+              {#if pl.isOwner}
+                <div class="add">
+                  <input
+                    class="input"
+                    placeholder="Bu listeye şarkı ekle…"
+                    bind:value={addQuery}
+                    onkeydown={(e) => e.key === "Enter" && addTrack()}
+                    aria-label="Playliste şarkı ekle"
+                  />
+                  <button class="btn" disabled={busy || !addQuery.trim()} onclick={addTrack}>
+                    {busy ? "…" : "Ekle"}
+                  </button>
+                </div>
+                {#if addStatus}<p class="muted">{addStatus}</p>{/if}
+              {/if}
             </div>
           {/if}
         </li>
@@ -351,14 +383,21 @@
     transform: rotate(90deg);
   }
   .pl-name {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 600;
   }
+  .pub {
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
   .pl-count {
+    flex: 1;
+    text-align: right;
     font-size: 0.74rem;
     color: var(--muted);
   }
@@ -382,6 +421,9 @@
     border-color: var(--border);
     color: var(--text);
   }
+  .mini.on {
+    color: var(--primary);
+  }
   .mini.danger:hover {
     color: var(--danger);
     border-color: var(--danger);
@@ -402,6 +444,9 @@
   }
   .trow:hover {
     background: var(--surface-2);
+  }
+  .trow.readonly {
+    padding-left: 0.5rem;
   }
   .grip {
     color: var(--muted);

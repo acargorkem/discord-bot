@@ -47,3 +47,8 @@ export const moveSchema = v.object({
   from: v.pipe(v.number(), v.integer(), v.minValue(0)),
   to: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
+
+/** POST /api/playlists/:id/visibility gövdesi. */
+export const visibilitySchema = v.object({
+  public: v.boolean(),
+});
