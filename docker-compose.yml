@@ -14,6 +14,11 @@ services:
       NODELINK_SERVER_PASSWORD: "${NODELINK_PASSWORD:-youshallnotpass}"
       NODELINK_CLUSTER_WORKERS: "1"
       NODELINK_LOGGING_LEVEL: "info"
+      # YouTube OAuth — datacenter IP throttling'i aşmak için (bkz docs/YOUTUBE_OAUTH.md).
+      # İlk kurulumda .env'de NODELINK_YT_OAUTH=true yapıp loglardan giriş yap,
+      # çıkan refresh token'ı .env'deki NODELINK_YT_REFRESH_TOKEN'e koy, OAUTH'u false yap.
+      NODELINK_SOURCES_YOUTUBE_GETOAUTHTOKEN: "${NODELINK_YT_OAUTH:-false}"
+      NODELINK_SOURCES_YOUTUBE_CLIENTS_SETTINGS_TV_REFRESHTOKEN: "${NODELINK_YT_REFRESH_TOKEN:-}"
     restart: unless-stopped
     networks: [botnet]
 
