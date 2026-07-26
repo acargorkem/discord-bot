@@ -38,6 +38,11 @@ export function createLavalink(client: Client): LavalinkManager {
         port: config.lavalink.port,
         authorization: config.lavalink.password,
         secure: false,
+        // NodeLink yeniden başladığında (ya da bot ondan önce açıldığında) bot
+        // kendi kendine yeniden bağlansın. Varsayılan 5 deneme yetmiyor; pratikte
+        // sınırsız dene ki manuel bot restart'ı gerekmesin.
+        retryAmount: 1_000_000,
+        retryDelay: 5_000,
         // Önceki oturumu (varsa) devral — deploy sonrası müzik kesilmesin.
         sessionId: getStoredSessionId(),
       },
