@@ -25,6 +25,7 @@ function buildState(service: MusicService, channels: ChannelService) {
     nowPlaying: service.getNowPlaying(),
     queue: service.getQueue(),
     channelId: channels.currentChannelId(),
+    shuffle: service.getShuffle(),
   };
 }
 

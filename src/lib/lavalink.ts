@@ -5,6 +5,7 @@ import { botEvents } from "./events.js";
 import { recordPlay } from "./history.js";
 import { logger } from "./logger.js";
 import { sqliteQueueStore } from "./queueStore.js";
+import { isShuffle, promoteRandomNext } from "./shuffle.js";
 import {
   deletePlayerSession,
   getPlayerSession,
@@ -129,6 +130,10 @@ function attachListeners(client: Client, lavalink: LavalinkManager): void {
   // --- Oynatıcı / parça olayları ---
   lavalink
     .on("trackStart", async (player, track) => {
+      // Karışık çalma açıksa: sıradakini rastgele bir kuyruk parçasıyla değiştir
+      // (kuyruk kalıcı olarak karışmaz, sadece bir sonraki geçiş rastgele olur).
+      if (isShuffle(player)) await promoteRandomNext(player);
+
       // Çalınan parçayı geçmişe kaydet (istatistikler için).
       recordPlay(
         player.guildId,

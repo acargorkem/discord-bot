@@ -30,6 +30,12 @@ const insertPlaylistStmt = db.prepare(
 const insertTrackStmt = db.prepare(
   "INSERT INTO playlist_tracks (playlist_id, position, encoded, title, uri, author, duration) VALUES (?, ?, ?, ?, ?, ?, ?)",
 );
+const renamePlaylistStmt = db.prepare(
+  "UPDATE playlists SET name = ? WHERE guild_id = ? AND owner_id = ? AND name = ?",
+);
+const deleteAllTracksStmt = db.prepare(
+  "DELETE FROM playlist_tracks WHERE playlist_id = ?",
+);
 const selectTracksStmt = db.prepare(
   "SELECT encoded, title, uri, author, duration FROM playlist_tracks WHERE playlist_id = ? ORDER BY position",
 );
@@ -139,6 +145,66 @@ export function addTrackToPlaylist(
     track.info.duration ?? null,
   );
   return true;
+}
+
+/** Boş bir playlist oluşturur. Aynı isim zaten varsa false. */
+export function createEmptyPlaylist(
+  guildId: string,
+  ownerId: string,
+  name: string,
+): boolean {
+  if (selectPlaylistId.get(guildId, ownerId, name)) return false;
+  insertPlaylistStmt.run(guildId, ownerId, name, Date.now());
+  return true;
+}
+
+/** Bir playlisti yeniden adlandırır. Yeni isim zaten varsa veya kaynak yoksa false. */
+export function renamePlaylist(
+  guildId: string,
+  ownerId: string,
+  name: string,
+  newName: string,
+): boolean {
+  if (name === newName) return true;
+  if (selectPlaylistId.get(guildId, ownerId, newName)) return false;
+  return Number(renamePlaylistStmt.run(newName, guildId, ownerId, name).changes) > 0;
+}
+
+/** Playlistte bir parçayı başka konuma taşır (sıralamayı yeniden yazar). */
+export function moveTrackInPlaylist(
+  guildId: string,
+  ownerId: string,
+  name: string,
+  from: number,
+  to: number,
+): boolean {
+  const row = selectPlaylistId.get(guildId, ownerId, name) as { id: number } | undefined;
+  if (!row) return false;
+  const tracks = selectTracksWithPosStmt.all(row.id) as unknown as StoredTrackWithPos[];
+  if (from < 0 || from >= tracks.length || to < 0 || to >= tracks.length) return false;
+  if (from === to) return true;
+  const [moved] = tracks.splice(from, 1);
+  tracks.splice(to, 0, moved);
+  db.exec("BEGIN");
+  try {
+    deleteAllTracksStmt.run(row.id);
+    tracks.forEach((track, index) => {
+      insertTrackStmt.run(
+        row.id,
+        index,
+        track.encoded,
+        track.title,
+        track.uri,
+        track.author,
+        track.duration,
+      );
+    });
+    db.exec("COMMIT");
+    return true;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 /** Verilen konumdaki parçayı siler ve kalan konumları sıkıştırır. */

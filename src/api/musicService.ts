@@ -1,4 +1,5 @@
 import type { LavalinkManager, RepeatMode } from "lavalink-client";
+import { isShuffle } from "../lib/shuffle.js";
 
 /** API'nin döndürdüğü "şimdi çalıyor" görünümü. */
 export interface NowPlaying {
@@ -29,6 +30,8 @@ export interface QueueTrackView {
 export interface MusicService {
   getNowPlaying(): NowPlaying | null;
   getQueue(): QueueTrackView[];
+  /** Karışık çalma açık mı? */
+  getShuffle(): boolean;
 }
 
 /** Gerçek servis: lavalink-client player durumundan okur. */
@@ -62,6 +65,10 @@ export function createMusicService(
         uri: track.info.uri ?? null,
         duration: track.info.duration ?? 0,
       }));
+    },
+    getShuffle() {
+      const player = lavalink.getPlayer(guildId);
+      return player ? isShuffle(player) : false;
     },
   };
 }

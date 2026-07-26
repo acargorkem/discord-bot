@@ -22,6 +22,11 @@ const okControl: ControlService = {
   setVolume: async () => ({ ok: true, message: "ok" }),
   seek: async () => ({ ok: true, message: "ok" }),
   play: async () => ({ ok: true, message: "ok" }),
+  previous: async () => ({ ok: true, message: "ok" }),
+  toggleShuffle: async () => ({ ok: true, message: "ok", shuffle: true }),
+  setRepeat: async () => ({ ok: true, message: "ok" }),
+  moveTrack: async () => ({ ok: true, message: "ok" }),
+  removeTrack: async () => ({ ok: true, message: "ok" }),
 };
 
 const okPanel: PanelService = {
@@ -32,6 +37,9 @@ const okPanel: PanelService = {
   getPlaylistTracks: () => [],
   addToPlaylist: async () => ({ ok: true, message: "ok" }),
   removeFromPlaylist: () => ({ ok: true, message: "ok" }),
+  createPlaylist: () => ({ ok: true, message: "ok" }),
+  renamePlaylist: () => ({ ok: true, message: "ok" }),
+  movePlaylistTrack: () => ({ ok: true, message: "ok" }),
   getSettings: () => ({ defaultVolume: 100 }),
   setDefaultVolume: () => {},
 };
@@ -90,6 +98,7 @@ function makeApp(
   const service: MusicService = {
     getNowPlaying: () => null,
     getQueue: () => [],
+    getShuffle: () => false,
     ...opts.service,
   };
   const owners = opts.allowedUserIds ?? ["owner-1"];
@@ -298,6 +307,79 @@ describe("kontrol uçları", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("POST /api/control/previous → previous çağırır", async () => {
+    const previous = vi.fn(async () => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ control: { previous } }).request(
+      "/api/control/previous",
+      { method: "POST", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+    expect(previous).toHaveBeenCalledOnce();
+  });
+
+  it("POST /api/control/shuffle → toggleShuffle çağırır", async () => {
+    const toggleShuffle = vi.fn(async () => ({
+      ok: true,
+      message: "ok",
+      shuffle: true,
+    }));
+    const res = await makeApp({ control: { toggleShuffle } }).request(
+      "/api/control/shuffle",
+      { method: "POST", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+    expect(toggleShuffle).toHaveBeenCalledOnce();
+  });
+
+  it("POST /api/control/repeat geçerli mod → setRepeat çağırır", async () => {
+    const setRepeat = vi.fn(async () => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ control: { setRepeat } }).request("/api/control/repeat", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "queue" }),
+    });
+    expect(res.status).toBe(200);
+    expect(setRepeat).toHaveBeenCalledWith("queue");
+  });
+
+  it("POST /api/control/repeat geçersiz mod (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/control/repeat", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "sometimes" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/queue/move geçerli → moveTrack çağırır", async () => {
+    const moveTrack = vi.fn(async () => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ control: { moveTrack } }).request("/api/queue/move", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ from: 2, to: 0 }),
+    });
+    expect(res.status).toBe(200);
+    expect(moveTrack).toHaveBeenCalledWith(2, 0);
+  });
+
+  it("DELETE /api/queue/:index → removeTrack çağırır", async () => {
+    const removeTrack = vi.fn(async () => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ control: { removeTrack } }).request("/api/queue/3", {
+      method: "DELETE",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(200);
+    expect(removeTrack).toHaveBeenCalledWith(3);
+  });
+
+  it("DELETE /api/queue/:index geçersiz index → 400", async () => {
+    const res = await makeApp().request("/api/queue/abc", {
+      method: "DELETE",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("playlist ve ayar uçları", () => {
@@ -424,6 +506,48 @@ describe("playlist ve ayar uçları", () => {
       headers: controlHeaders(),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("POST /api/playlists/empty → createPlaylist çağırır", async () => {
+    const createPlaylist = vi.fn(() => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ panel: { createPlaylist } }).request(
+      "/api/playlists/empty",
+      {
+        method: "POST",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Roadtrip" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(createPlaylist).toHaveBeenCalledWith("owner-1", "Roadtrip");
+  });
+
+  it("PATCH /api/playlists/:name → renamePlaylist çağırır", async () => {
+    const renamePlaylist = vi.fn(() => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ panel: { renamePlaylist } }).request(
+      "/api/playlists/favoriler",
+      {
+        method: "PATCH",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "en-iyiler" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(renamePlaylist).toHaveBeenCalledWith("owner-1", "favoriler", "en-iyiler");
+  });
+
+  it("POST /api/playlists/:name/tracks/move → movePlaylistTrack çağırır", async () => {
+    const movePlaylistTrack = vi.fn(() => ({ ok: true, message: "ok" }));
+    const res = await makeApp({ panel: { movePlaylistTrack } }).request(
+      "/api/playlists/favoriler/tracks/move",
+      {
+        method: "POST",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ from: 3, to: 1 }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(movePlaylistTrack).toHaveBeenCalledWith("owner-1", "favoriler", 3, 1);
   });
 
   it("GET /api/settings oturumla → varsayılan ses", async () => {

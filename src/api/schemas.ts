@@ -35,3 +35,14 @@ export const grantSchema = v.object({
   userId: v.pipe(v.string(), v.regex(/^\d{5,25}$/)),
   username: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64)),
 });
+
+/** POST /api/control/repeat gövdesi. */
+export const repeatSchema = v.object({
+  mode: v.picklist(["off", "track", "queue"]),
+});
+
+/** Sıra değiştirme gövdesi (kuyruk veya playlist parça taşıma). */
+export const moveSchema = v.object({
+  from: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  to: v.pipe(v.number(), v.integer(), v.minValue(0)),
+});
