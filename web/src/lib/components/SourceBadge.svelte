@@ -11,21 +11,21 @@
     youtube: "srcYoutube",
     soundcloud: "srcSoundcloud",
     deezer: "srcDeezer",
-    applemusic: "music",
-    bandcamp: "music",
+    applemusic: "srcApple",
+    bandcamp: "srcBandcamp",
     other: "music",
   };
 </script>
 
 <span class="badge" style="background:{sourceColor[source]}" title={sourceLabel[source]}>
-  <Icon name={glyph[source]} size={12} />
+  <Icon name={glyph[source]} size={13} />
 </span>
 
 <style>
   .badge {
-    width: 18px;
-    height: 18px;
-    border-radius: 5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
