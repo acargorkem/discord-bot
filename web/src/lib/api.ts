@@ -27,6 +27,12 @@ export interface StateMessage {
   type: "state";
   nowPlaying: NowPlaying | null;
   queue: QueueTrack[];
+  channelId: string | null;
+}
+
+export interface VoiceChannel {
+  id: string;
+  name: string;
 }
 
 /** Giriş yapmış kullanıcıyı döner; oturum yoksa null. */
@@ -102,6 +108,27 @@ export async function updateSettings(defaultVolume: number): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ defaultVolume }),
   });
+}
+
+export async function fetchChannels(): Promise<{
+  channels: VoiceChannel[];
+  current: string | null;
+}> {
+  const res = await fetch("/api/channels");
+  if (!res.ok) return { channels: [], current: null };
+  return (await res.json()) as { channels: VoiceChannel[]; current: string | null };
+}
+
+export async function joinChannel(channelId: string): Promise<void> {
+  await fetch("/api/control/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channelId }),
+  });
+}
+
+export async function leaveChannel(): Promise<void> {
+  await fetch("/api/control/leave", { method: "POST" });
 }
 
 /** Canlı durum yayınına bağlanır. */

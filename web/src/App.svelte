@@ -10,6 +10,7 @@
     type NowPlaying,
     type QueueTrack,
   } from "./lib/api";
+  import Channels from "./lib/components/Channels.svelte";
   import Controls from "./lib/components/Controls.svelte";
   import NowPlayingCard from "./lib/components/NowPlaying.svelte";
   import Playlists from "./lib/components/Playlists.svelte";
@@ -21,6 +22,7 @@
   let loading = $state(true);
   let nowPlaying = $state<NowPlaying | null>(null);
   let queue = $state<QueueTrack[]>([]);
+  let channelId = $state<string | null>(null);
   let dark = $state(false);
   let authError = $state<string | null>(null);
   let ws: WebSocket | undefined;
@@ -46,6 +48,7 @@
         ws = connectState((state) => {
           nowPlaying = state.nowPlaying;
           queue = state.queue;
+          channelId = state.channelId;
         });
       }
     })();
@@ -100,6 +103,14 @@
       </div>
     {:else}
       <div class="flex flex-col gap-6">
+        <section class="card">
+          <h2
+            class="text-sm font-semibold text-[var(--muted)] mb-3 uppercase tracking-wide"
+          >
+            Ses Kanalı
+          </h2>
+          <Channels currentChannelId={channelId} />
+        </section>
         <section class="card">
           <NowPlayingCard track={nowPlaying} />
           <div class="mt-5">

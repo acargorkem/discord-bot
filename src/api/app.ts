@@ -4,10 +4,12 @@ import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { botEvents } from "../lib/events.js";
 import { type AuthConfig, createAuthRoutes, requireAuth, sessionUser } from "./auth.js";
+import type { ChannelService } from "./channelService.js";
 import type { ControlResult, ControlService } from "./controlService.js";
 import type { MusicService } from "./musicService.js";
 import type { PanelService } from "./panelService.js";
 import {
+  joinSchema,
   savePlaylistSchema,
   seekSchema,
   settingsSchema,
@@ -18,6 +20,7 @@ export interface ApiDeps {
   service: MusicService;
   control: ControlService;
   panel: PanelService;
+  channels: ChannelService;
   /** Botun Discord'a bağlı olup olmadığı (healthcheck için). */
   isReady: () => boolean;
   auth: AuthConfig;
@@ -109,6 +112,26 @@ export function createApiApp(deps: ApiDeps): Hono {
     if (!user) return c.json({ error: "unauthorized" }, 401);
     const ok = deps.panel.deletePlaylist(user.id, c.req.param("name"));
     return c.json({ ok }, ok ? 200 : 404);
+  });
+
+  // --- Korumalı: ses kanalı yönetimi ---
+  app.get("/api/channels", requireAuth, (c) =>
+    c.json({
+      channels: deps.channels.listVoiceChannels(),
+      current: deps.channels.currentChannelId(),
+    }),
+  );
+
+  app.post("/api/control/join", ...guards, vValidator("json", joinSchema), async (c) => {
+    const result = await deps.channels.join(c.req.valid("json").channelId);
+    if (result.ok) botEvents.emit("stateChanged");
+    return c.json(result, result.ok ? 200 : 409);
+  });
+
+  app.post("/api/control/leave", ...guards, async (c) => {
+    const result = await deps.channels.leave();
+    if (result.ok) botEvents.emit("stateChanged");
+    return c.json(result, result.ok ? 200 : 409);
   });
 
   // --- Korumalı: ayarlar ---

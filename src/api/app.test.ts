@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import { describe, expect, it, vi } from "vitest";
 import { createApiApp } from "./app";
 import type { AuthConfig, OAuthProvider } from "./auth";
+import type { ChannelService } from "./channelService";
 import type { ControlService } from "./controlService";
 import type { MusicService, NowPlaying, QueueTrackView } from "./musicService";
 import type { PanelService } from "./panelService";
@@ -28,6 +29,13 @@ const okPanel: PanelService = {
   deletePlaylist: () => true,
   getSettings: () => ({ defaultVolume: 100 }),
   setDefaultVolume: () => {},
+};
+
+const okChannels: ChannelService = {
+  listVoiceChannels: () => [],
+  currentChannelId: () => null,
+  join: async () => ({ ok: true, message: "ok" }),
+  leave: async () => ({ ok: true, message: "ok" }),
 };
 
 const CSRF_ORIGIN = "http://localhost";
@@ -59,6 +67,7 @@ function makeApp(
     service?: Partial<MusicService>;
     control?: Partial<ControlService>;
     panel?: Partial<PanelService>;
+    channels?: Partial<ChannelService>;
     isReady?: boolean;
     provider?: OAuthProvider;
     allowedUserIds?: string[];
@@ -81,6 +90,7 @@ function makeApp(
     service,
     control: { ...okControl, ...opts.control },
     panel: { ...okPanel, ...opts.panel },
+    channels: { ...okChannels, ...opts.channels },
     isReady: () => opts.isReady ?? true,
     auth,
     rateLimit: opts.rateLimit ?? passThrough,
@@ -325,5 +335,51 @@ describe("playlist ve ayar uçları", () => {
       body: JSON.stringify({ defaultVolume: 999 }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("kanal uçları", () => {
+  it("GET /api/channels oturumla → liste + mevcut kanal", async () => {
+    const res = await makeApp({
+      channels: {
+        listVoiceChannels: () => [{ id: "1", name: "Genel" }],
+        currentChannelId: () => "1",
+      },
+    }).request("/api/channels", { headers: { Cookie: authedCookie() } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      channels: [{ id: "1", name: "Genel" }],
+      current: "1",
+    });
+  });
+
+  it("POST /api/control/join geçerli id → join çağırır", async () => {
+    const join = vi.fn(async () => ({ ok: true, message: "girildi" }));
+    const res = await makeApp({ channels: { join } }).request("/api/control/join", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "123456789012345678" }),
+    });
+    expect(res.status).toBe(200);
+    expect(join).toHaveBeenCalledWith("123456789012345678");
+  });
+
+  it("POST /api/control/join geçersiz id (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/control/join", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: "abc" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/control/leave → leave çağırır", async () => {
+    const leave = vi.fn(async () => ({ ok: true, message: "çıkıldı" }));
+    const res = await makeApp({ channels: { leave } }).request("/api/control/leave", {
+      method: "POST",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(200);
+    expect(leave).toHaveBeenCalledOnce();
   });
 });

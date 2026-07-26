@@ -19,3 +19,8 @@ export const savePlaylistSchema = v.object({
 export const settingsSchema = v.object({
   defaultVolume: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(150)),
 });
+
+/** POST /api/control/join gövdesi (Discord kanal ID'si = snowflake). */
+export const joinSchema = v.object({
+  channelId: v.pipe(v.string(), v.regex(/^\d{5,25}$/)),
+});
