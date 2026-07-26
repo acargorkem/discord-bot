@@ -51,7 +51,7 @@ export function startApiServer(client: Client): void {
 
   const app = createApiApp({
     service,
-    control: createControlService(client.lavalink, config.guildId),
+    control: createControlService(client, config.guildId),
     panel: createPanelService(client.lavalink, config.guildId),
     channels,
     isReady: () => client.isReady(),

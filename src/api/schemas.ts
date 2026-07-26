@@ -24,3 +24,8 @@ export const settingsSchema = v.object({
 export const joinSchema = v.object({
   channelId: v.pipe(v.string(), v.regex(/^\d{5,25}$/)),
 });
+
+/** POST /api/control/play gövdesi (şarkı adı veya link). */
+export const playSchema = v.object({
+  query: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(400)),
+});

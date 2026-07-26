@@ -10,6 +10,7 @@
     type NowPlaying,
     type QueueTrack,
   } from "./lib/api";
+  import AddSong from "./lib/components/AddSong.svelte";
   import Channels from "./lib/components/Channels.svelte";
   import Controls from "./lib/components/Controls.svelte";
   import NowPlayingCard from "./lib/components/NowPlaying.svelte";
@@ -110,6 +111,14 @@
             Ses Kanalı
           </h2>
           <Channels currentChannelId={channelId} />
+        </section>
+        <section class="card">
+          <h2
+            class="text-sm font-semibold text-[var(--muted)] mb-3 uppercase tracking-wide"
+          >
+            Şarkı Ekle
+          </h2>
+          <AddSong />
         </section>
         <section class="card">
           <NowPlayingCard track={nowPlaying} />

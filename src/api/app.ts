@@ -10,6 +10,7 @@ import type { MusicService } from "./musicService.js";
 import type { PanelService } from "./panelService.js";
 import {
   joinSchema,
+  playSchema,
   savePlaylistSchema,
   seekSchema,
   settingsSchema,
@@ -83,6 +84,9 @@ export function createApiApp(deps: ApiDeps): Hono {
   );
   app.post("/api/control/seek", ...guards, vValidator("json", seekSchema), async (c) =>
     controlResponse(c, await deps.control.seek(c.req.valid("json").position)),
+  );
+  app.post("/api/control/play", ...guards, vValidator("json", playSchema), async (c) =>
+    controlResponse(c, await deps.control.play(c.req.valid("json").query)),
   );
 
   // --- Korumalı: playlist ---

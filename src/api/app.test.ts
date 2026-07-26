@@ -20,6 +20,7 @@ const okControl: ControlService = {
   stop: async () => ({ ok: true, message: "ok" }),
   setVolume: async () => ({ ok: true, message: "ok" }),
   seek: async () => ({ ok: true, message: "ok" }),
+  play: async () => ({ ok: true, message: "ok" }),
 };
 
 const okPanel: PanelService = {
@@ -257,6 +258,26 @@ describe("kontrol uçları", () => {
     const second = await app.request("/api/control/pause", { method: "POST", headers });
     expect(first.status).toBe(200);
     expect(second.status).toBe(429);
+  });
+
+  it("POST /api/control/play geçerli sorgu → play çağırır", async () => {
+    const play = vi.fn(async () => ({ ok: true, message: "eklendi" }));
+    const res = await makeApp({ control: { play } }).request("/api/control/play", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "daft punk" }),
+    });
+    expect(res.status).toBe(200);
+    expect(play).toHaveBeenCalledWith("daft punk");
+  });
+
+  it("POST /api/control/play boş sorgu (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/control/play", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "  " }),
+    });
+    expect(res.status).toBe(400);
   });
 });
 
