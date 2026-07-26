@@ -103,4 +103,14 @@ export function startApiServer(client: Client): void {
   botEvents.on("stateChanged", () =>
     broadcaster.broadcast(buildState(service, channels)),
   );
+
+  // Oynatma sürerken periyodik yayın: paneldeki konum çubuğu gerçek oynatma
+  // konumuyla senkron kalsın (aksi halde olaylar arasında kayar; özellikle
+  // ses throttle olunca). Yalnızca çalan bir şey varken yayınla.
+  const syncTimer = setInterval(() => {
+    if (service.getNowPlaying()) {
+      broadcaster.broadcast(buildState(service, channels));
+    }
+  }, 3000);
+  syncTimer.unref();
 }

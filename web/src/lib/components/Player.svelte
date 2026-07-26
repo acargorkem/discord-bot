@@ -8,15 +8,33 @@
 
   const disabled = $derived(!track);
   const src = $derived(track ? trackSource(track.uri) : "other");
+
+  // Canlı ilerleme: WebSocket durumu olay bazlı gelir; aradaki saniyeleri
+  // istemcide sayarız. Yeni durum gelince taban konum yeniden senkronlanır.
+  let displayPos = $state(0);
+  $effect(() => {
+    displayPos = track?.position ?? 0;
+  });
+  $effect(() => {
+    if (!track || track.paused || track.isStream) return;
+    const duration = track.duration;
+    const id = setInterval(() => {
+      displayPos = Math.min(displayPos + 1000, duration);
+    }, 1000);
+    return () => clearInterval(id);
+  });
+
   const progress = $derived(
     track && track.duration > 0
-      ? Math.min((track.position / track.duration) * 100, 100)
+      ? Math.min((displayPos / track.duration) * 100, 100)
       : 0,
   );
 
-  // Ses: player'dan gelen değeri yansıt, kullanıcı değiştirince gönder.
+  // Ses: player'dan gelen değeri yansıt; kullanıcı değiştirince yereli hemen
+  // güncelle ama sunucuya gönderimi debounce et (sürükleme spam'ini önler).
   let vol = $state(100);
   let lastNonZero = $state(100);
+  let volTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     if (track) vol = track.volume;
   });
@@ -24,7 +42,8 @@
   function applyVolume(v: number) {
     vol = v;
     if (v > 0) lastNonZero = v;
-    void control("volume", { volume: v });
+    clearTimeout(volTimer);
+    volTimer = setTimeout(() => void control("volume", { volume: v }), 250);
   }
 
   function toggleMute() {
@@ -81,7 +100,7 @@
       <div class="knob" style="left:{progress}%"></div>
     </div>
     <div class="times">
-      <span>{formatDuration(track?.position ?? 0)}</span>
+      <span>{formatDuration(displayPos)}</span>
       <span>{track?.isStream ? "🔴 Canlı" : formatDuration(track?.duration ?? 0)}</span>
     </div>
   </div>
