@@ -33,6 +33,9 @@ export const config = {
     host: optional("LAVALINK_HOST", "localhost"),
     port: Number(optional("LAVALINK_PORT", "4000")),
     password: optional("LAVALINK_PASSWORD", "youshallnotpass"),
+    // İsimle aramada kullanılacak varsayılan kaynak. NodeLink'te YouTube
+    // kapalıysa "soundcloud" yap (yoksa bot ytsearch deneyip hata verir).
+    searchPlatform: optional("SEARCH_PLATFORM", "youtube"),
   },
 
   /** Web paneli (Discord OAuth2) — yalnızca panel kullanılırken gerekir. */
