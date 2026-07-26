@@ -2,7 +2,13 @@
   import { onMount } from "svelte";
   import { fetchChannels, joinChannel, leaveChannel, type VoiceChannel } from "../api";
 
-  let { currentChannelId }: { currentChannelId: string | null } = $props();
+  let {
+    currentChannelId,
+    onname,
+  }: {
+    currentChannelId: string | null;
+    onname?: (name: string | null) => void;
+  } = $props();
 
   let channels = $state<VoiceChannel[]>([]);
   let selected = $state("");
@@ -16,6 +22,11 @@
   const currentName = $derived(
     channels.find((channel) => channel.id === currentChannelId)?.name ?? null,
   );
+
+  // Bölüm özetinde göstermek için mevcut kanal adını yukarı bildir.
+  $effect(() => {
+    onname?.(currentName);
+  });
 </script>
 
 <div class="flex flex-col gap-3">

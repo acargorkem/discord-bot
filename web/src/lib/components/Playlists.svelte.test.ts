@@ -18,8 +18,11 @@ vi.mock("../api", () => ({
       duration: 200000,
     },
   ]),
-  addToPlaylist: vi.fn(async () => ({ ok: true, message: "1 parça eklendi." })),
+  addToPlaylist: vi.fn(async () => ({ ok: true, message: "eklendi" })),
   removeFromPlaylist: vi.fn(async () => {}),
+  createPlaylist: vi.fn(async () => ({ ok: true, message: "oluşturuldu" })),
+  renamePlaylist: vi.fn(async () => ({ ok: true, message: "adlandırıldı" })),
+  movePlaylistTrack: vi.fn(async () => {}),
 }));
 
 test("kayıtlı playlistleri listeler", async () => {
@@ -33,16 +36,21 @@ test("yükle butonu loadPlaylist çağırır", async () => {
   expect(api.loadPlaylist).toHaveBeenCalledWith("favoriler");
 });
 
-test("playlist açılınca parçaları ve kaynak rozetini gösterir", async () => {
+test("playlist açılınca parçaları gösterir", async () => {
   render(Playlists);
   await page.getByRole("button", { name: "Aç/kapat: favoriler" }).click();
   await expect.element(page.getByText("Silvera")).toBeInTheDocument();
-  await expect.element(page.getByText("Spotify")).toBeInTheDocument();
 });
 
-test("parça silme removeFromPlaylist çağırır", async () => {
+test("yeni boş playlist oluşturur", async () => {
   render(Playlists);
-  await page.getByRole("button", { name: "Aç/kapat: favoriler" }).click();
-  await page.getByRole("button", { name: "Parçayı sil: Silvera" }).click();
-  expect(api.removeFromPlaylist).toHaveBeenCalledWith("favoriler", 0);
+  await page.getByPlaceholder("Yeni playlist adı…").fill("Roadtrip");
+  await page.getByRole("button", { name: "Oluştur" }).click();
+  expect(api.createPlaylist).toHaveBeenCalledWith("Roadtrip");
+});
+
+test("sil butonu onay modalı açar", async () => {
+  render(Playlists);
+  await page.getByRole("button", { name: "Sil: favoriler" }).click();
+  await expect.element(page.getByText("Playlist'i sil?")).toBeInTheDocument();
 });

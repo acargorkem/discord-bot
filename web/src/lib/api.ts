@@ -29,7 +29,10 @@ export interface StateMessage {
   nowPlaying: NowPlaying | null;
   queue: QueueTrack[];
   channelId: string | null;
+  shuffle: boolean;
 }
+
+export type RepeatMode = "off" | "track" | "queue";
 
 export interface VoiceChannel {
   id: string;
@@ -61,6 +64,24 @@ export async function control(action: string, body?: unknown): Promise<void> {
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+export async function setRepeat(mode: RepeatMode): Promise<void> {
+  await control("repeat", { mode });
+}
+
+/** Kuyrukta bir parçayı başka konuma taşır. */
+export async function moveQueue(from: number, to: number): Promise<void> {
+  await fetch("/api/queue/move", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to }),
+  });
+}
+
+/** Kuyruktan bir parçayı kaldırır. */
+export async function removeFromQueue(index: number): Promise<void> {
+  await fetch(`/api/queue/${index}`, { method: "DELETE" });
 }
 
 export async function logout(): Promise<void> {
@@ -111,26 +132,57 @@ export async function fetchPlaylistTracks(name: string): Promise<PlaylistTrack[]
 
 /** Arama sorgusuyla bulunan parçayı playliste ekler. Sonuç mesajını döner. */
 export async function addToPlaylist(name: string, query: string): Promise<PlayResult> {
-  const res = await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  try {
-    const data = (await res.json()) as Partial<PlayResult>;
-    if (typeof data.message === "string") {
-      return { ok: data.ok === true, message: data.message };
-    }
-  } catch {
-    // JSON değilse aşağıya düş.
-  }
-  return { ok: false, message: "İstek gönderilemedi." };
+  return jsonResult(
+    await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }),
+  );
 }
 
 /** Playlistten verilen konumdaki parçayı siler. */
 export async function removeFromPlaylist(name: string, position: number): Promise<void> {
   await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks/${position}`, {
     method: "DELETE",
+  });
+}
+
+/** Boş bir playlist oluşturur. */
+export async function createPlaylist(name: string): Promise<PlayResult> {
+  return jsonResult(
+    await fetch("/api/playlists/empty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  );
+}
+
+/** Bir playlisti yeniden adlandırır. */
+export async function renamePlaylist(
+  name: string,
+  newName: string,
+): Promise<PlayResult> {
+  return jsonResult(
+    await fetch(`/api/playlists/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    }),
+  );
+}
+
+/** Playlistte bir parçayı başka konuma taşır. */
+export async function movePlaylistTrack(
+  name: string,
+  from: number,
+  to: number,
+): Promise<void> {
+  await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to }),
   });
 }
 
@@ -177,22 +229,28 @@ export interface PlayResult {
   message: string;
 }
 
-/** Şarkı adı/link ile arayıp kuyruğa ekler. Sonuç mesajını döner. */
-export async function playTrack(query: string): Promise<PlayResult> {
-  const res = await fetch("/api/control/play", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
+/** {ok,message} dönen uçların yanıtını güvenle ayrıştırır. */
+async function jsonResult(res: Response): Promise<PlayResult> {
   try {
     const data = (await res.json()) as Partial<PlayResult>;
     if (typeof data.message === "string") {
       return { ok: data.ok === true, message: data.message };
     }
   } catch {
-    // JSON değilse aşağıdaki genel mesaja düş.
+    // JSON değilse aşağıya düş.
   }
   return { ok: false, message: "İstek gönderilemedi." };
+}
+
+/** Şarkı adı/link ile arayıp kuyruğa ekler. Sonuç mesajını döner. */
+export async function playTrack(query: string): Promise<PlayResult> {
+  return jsonResult(
+    await fetch("/api/control/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }),
+  );
 }
 
 export interface Member {
@@ -226,20 +284,13 @@ export async function fetchAccess(): Promise<AccessEntry[]> {
 
 /** Bir üyeye panel erişimi verir. */
 export async function grantAccess(userId: string, username: string): Promise<PlayResult> {
-  const res = await fetch("/api/access", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, username }),
-  });
-  try {
-    const data = (await res.json()) as Partial<PlayResult>;
-    if (typeof data.message === "string") {
-      return { ok: data.ok === true, message: data.message };
-    }
-  } catch {
-    // JSON değilse aşağıya düş.
-  }
-  return { ok: false, message: "İstek gönderilemedi." };
+  return jsonResult(
+    await fetch("/api/access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, username }),
+    }),
+  );
 }
 
 /** Bir kullanıcının panel erişimini kaldırır. */

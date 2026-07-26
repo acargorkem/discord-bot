@@ -8,6 +8,7 @@
     type Member,
     revokeAccess,
   } from "../api";
+  import Icon from "./Icon.svelte";
 
   let access = $state<AccessEntry[]>([]);
   let members = $state<Member[]>([]);
@@ -20,10 +21,15 @@
     access = await fetchAccess();
   }
 
-  onMount(async () => {
-    await refresh();
+  async function loadMembers() {
+    loadingMembers = true;
     members = await fetchMembers();
     loadingMembers = false;
+  }
+
+  onMount(async () => {
+    await refresh();
+    await loadMembers();
   });
 
   const allowedIds = $derived(new Set(access.map((entry) => entry.userId)));
@@ -97,7 +103,16 @@
       aria-label="Üye ara"
     />
     {#if loadingMembers}
-      <p class="text-[var(--muted)] text-sm">Üyeler yükleniyor…</p>
+      <p class="loading"><span class="spinner"></span> Üyeler yükleniyor…</p>
+    {:else if !members.length}
+      <div class="retry">
+        <p class="text-[var(--muted)] text-sm">
+          Üye listesi alınamadı. Bu bazen olur — tekrar dene.
+        </p>
+        <button class="btn-sm" onclick={loadMembers}>
+          <Icon name="refresh" size={14} /> Yeniden dene
+        </button>
+      </div>
     {:else if candidates.length}
       <ul class="flex flex-col gap-1">
         {#each candidates as member (member.id)}
@@ -142,6 +157,9 @@
     color: var(--text);
   }
   .btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 0.3rem 0.6rem;
     border-radius: 0.5rem;
     border: 1px solid var(--border);
@@ -149,6 +167,37 @@
     color: var(--text);
     cursor: pointer;
     white-space: nowrap;
+  }
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation-duration: 2s;
+    }
+  }
+  .retry {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
   }
   .btn-sm:disabled {
     opacity: 0.5;
