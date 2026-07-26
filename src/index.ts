@@ -20,7 +20,12 @@ import type { Command } from "./types.js";
 // Bota hangi olayları dinleyeceğini söyleyen "intent"ler.
 // Guilds: temel sunucu olayları. GuildVoiceStates: ses kanallarını takip (müzik için gerekli).
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    // Panel yetki yönetiminde sunucu üyelerini listelemek için (privileged).
+    GatewayIntentBits.GuildMembers,
+  ],
 });
 
 // Ses yöneticisi (NodeLink'e bağlanır). init() aşağıda, bot hazır olunca çağrılır.

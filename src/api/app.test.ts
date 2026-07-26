@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { describe, expect, it, vi } from "vitest";
+import type { AccessService } from "./accessService";
 import { createApiApp } from "./app";
 import type { AuthConfig, OAuthProvider } from "./auth";
 import type { ChannelService } from "./channelService";
@@ -28,6 +29,9 @@ const okPanel: PanelService = {
   savePlaylist: () => ({ ok: true, message: "ok" }),
   loadPlaylist: async () => ({ ok: true, message: "ok" }),
   deletePlaylist: () => true,
+  getPlaylistTracks: () => [],
+  addToPlaylist: async () => ({ ok: true, message: "ok" }),
+  removeFromPlaylist: () => ({ ok: true, message: "ok" }),
   getSettings: () => ({ defaultVolume: 100 }),
   setDefaultVolume: () => {},
 };
@@ -37,6 +41,13 @@ const okChannels: ChannelService = {
   currentChannelId: () => null,
   join: async () => ({ ok: true, message: "ok" }),
   leave: async () => ({ ok: true, message: "ok" }),
+};
+
+const okAccess: AccessService = {
+  listMembers: async () => [],
+  listAccess: () => [],
+  grant: () => ({ ok: true, message: "ok" }),
+  revoke: () => ({ ok: true, message: "ok" }),
 };
 
 const CSRF_ORIGIN = "http://localhost";
@@ -69,6 +80,7 @@ function makeApp(
     control?: Partial<ControlService>;
     panel?: Partial<PanelService>;
     channels?: Partial<ChannelService>;
+    access?: Partial<AccessService>;
     isReady?: boolean;
     provider?: OAuthProvider;
     allowedUserIds?: string[];
@@ -80,9 +92,11 @@ function makeApp(
     getQueue: () => [],
     ...opts.service,
   };
+  const owners = opts.allowedUserIds ?? ["owner-1"];
   const auth: AuthConfig = {
     provider: opts.provider ?? fakeProvider,
-    allowedUserIds: opts.allowedUserIds ?? ["owner-1"],
+    ownerIds: owners,
+    isAllowed: (id) => owners.includes(id),
     generateState: () => "test-state",
     cookieSecure: false,
     panelUrl: "/panel",
@@ -92,6 +106,7 @@ function makeApp(
     control: { ...okControl, ...opts.control },
     panel: { ...okPanel, ...opts.panel },
     channels: { ...okChannels, ...opts.channels },
+    access: { ...okAccess, ...opts.access },
     isReady: () => opts.isReady ?? true,
     auth,
     rateLimit: opts.rateLimit ?? passThrough,
@@ -179,12 +194,16 @@ describe("API app", () => {
     expect(res.headers.get("location")).toBe("/panel?error=forbidden");
   });
 
-  it("GET /api/auth/me oturumla → kullanıcı", async () => {
+  it("GET /api/auth/me oturumla → kullanıcı (sahip)", async () => {
     const res = await makeApp().request("/api/auth/me", {
       headers: { Cookie: authedCookie() },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ id: "owner-1", username: "Owner" });
+    expect(await res.json()).toEqual({
+      id: "owner-1",
+      username: "Owner",
+      isOwner: true,
+    });
   });
 
   it("POST /api/auth/logout → 200", async () => {
@@ -328,6 +347,85 @@ describe("playlist ve ayar uçları", () => {
     expect(res.status).toBe(200);
   });
 
+  it("GET /api/playlists/:name/tracks oturumla → parça listesi", async () => {
+    const res = await makeApp({
+      panel: {
+        getPlaylistTracks: () => [
+          {
+            position: 0,
+            title: "A",
+            author: "X",
+            uri: "https://open.spotify.com/track/1",
+            duration: 1000,
+          },
+        ],
+      },
+    }).request("/api/playlists/favoriler/tracks", {
+      headers: { Cookie: authedCookie() },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      tracks: [
+        {
+          position: 0,
+          title: "A",
+          author: "X",
+          uri: "https://open.spotify.com/track/1",
+          duration: 1000,
+        },
+      ],
+    });
+  });
+
+  it("GET /api/playlists/:name/tracks yok → 404", async () => {
+    const res = await makeApp({ panel: { getPlaylistTracks: () => null } }).request(
+      "/api/playlists/yok/tracks",
+      { headers: { Cookie: authedCookie() } },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /api/playlists/:name/tracks geçerli sorgu → ekler", async () => {
+    const add = vi.fn(async () => ({ ok: true, message: "eklendi", count: 1 }));
+    const res = await makeApp({ panel: { addToPlaylist: add } }).request(
+      "/api/playlists/favoriler/tracks",
+      {
+        method: "POST",
+        headers: { ...controlHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "gojira silvera" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(add).toHaveBeenCalledWith("owner-1", "favoriler", "gojira silvera");
+  });
+
+  it("POST /api/playlists/:name/tracks boş sorgu (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/playlists/favoriler/tracks", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "  " }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE /api/playlists/:name/tracks/:position → siler", async () => {
+    const remove = vi.fn(() => ({ ok: true, message: "silindi" }));
+    const res = await makeApp({ panel: { removeFromPlaylist: remove } }).request(
+      "/api/playlists/favoriler/tracks/2",
+      { method: "DELETE", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+    expect(remove).toHaveBeenCalledWith("owner-1", "favoriler", 2);
+  });
+
+  it("DELETE /api/playlists/:name/tracks/:position geçersiz konum → 400", async () => {
+    const res = await makeApp().request("/api/playlists/favoriler/tracks/abc", {
+      method: "DELETE",
+      headers: controlHeaders(),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("GET /api/settings oturumla → varsayılan ses", async () => {
     const res = await makeApp({
       panel: { getSettings: () => ({ defaultVolume: 80 }) },
@@ -402,5 +500,104 @@ describe("kanal uçları", () => {
     });
     expect(res.status).toBe(200);
     expect(leave).toHaveBeenCalledOnce();
+  });
+});
+
+describe("yetki uçları (sadece sahip)", () => {
+  /** Sahip olmayan (ama oturumu olan) bir kullanıcı için cookie. */
+  function nonOwnerCookie(): string {
+    return `session=${createSession("granted-1", "Granted").id}`;
+  }
+
+  it("GET /api/access sahiple → erişim listesi", async () => {
+    const res = await makeApp({
+      access: {
+        listAccess: () => [
+          {
+            userId: "owner-1",
+            username: "Owner",
+            isOwner: true,
+            grantedBy: null,
+            grantedAt: null,
+          },
+        ],
+      },
+    }).request("/api/access", { headers: { Cookie: authedCookie() } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      access: [
+        {
+          userId: "owner-1",
+          username: "Owner",
+          isOwner: true,
+          grantedBy: null,
+          grantedAt: null,
+        },
+      ],
+    });
+  });
+
+  it("GET /api/access sahip değilse → 403", async () => {
+    const res = await makeApp().request("/api/access", {
+      headers: { Cookie: nonOwnerCookie() },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/access/members sahiple → üye listesi", async () => {
+    const res = await makeApp({
+      access: {
+        listMembers: async () => [
+          { id: "1", username: "ali", displayName: "Ali", avatarUrl: null },
+        ],
+      },
+    }).request("/api/access/members", { headers: { Cookie: authedCookie() } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      members: [{ id: "1", username: "ali", displayName: "Ali", avatarUrl: null }],
+    });
+  });
+
+  it("POST /api/access geçerli → grant çağırır (sahip id'siyle)", async () => {
+    const grant = vi.fn(() => ({ ok: true, message: "verildi" }));
+    const res = await makeApp({ access: { grant } }).request("/api/access", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "222222222222222222", username: "veli" }),
+    });
+    expect(res.status).toBe(200);
+    expect(grant).toHaveBeenCalledWith("222222222222222222", "veli", "owner-1");
+  });
+
+  it("POST /api/access geçersiz id (Valibot) → 400", async () => {
+    const res = await makeApp().request("/api/access", {
+      method: "POST",
+      headers: { ...controlHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: "abc", username: "veli" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/access sahip değilse → 403", async () => {
+    const res = await makeApp().request("/api/access", {
+      method: "POST",
+      headers: {
+        Cookie: nonOwnerCookie(),
+        Origin: CSRF_ORIGIN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: "222222222222222222", username: "veli" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("DELETE /api/access/:userId → revoke çağırır", async () => {
+    const revoke = vi.fn(() => ({ ok: true, message: "kaldırıldı" }));
+    const res = await makeApp({ access: { revoke } }).request(
+      "/api/access/222222222222222222",
+      { method: "DELETE", headers: controlHeaders() },
+    );
+    expect(res.status).toBe(200);
+    expect(revoke).toHaveBeenCalledWith("222222222222222222");
   });
 });

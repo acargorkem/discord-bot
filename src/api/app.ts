@@ -3,12 +3,14 @@ import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { csrf } from "hono/csrf";
 import { secureHeaders } from "hono/secure-headers";
 import { botEvents } from "../lib/events.js";
+import type { AccessService } from "./accessService.js";
 import { type AuthConfig, createAuthRoutes, requireAuth, sessionUser } from "./auth.js";
 import type { ChannelService } from "./channelService.js";
 import type { ControlResult, ControlService } from "./controlService.js";
 import type { MusicService } from "./musicService.js";
 import type { PanelService } from "./panelService.js";
 import {
+  grantSchema,
   joinSchema,
   playSchema,
   savePlaylistSchema,
@@ -22,6 +24,7 @@ export interface ApiDeps {
   control: ControlService;
   panel: PanelService;
   channels: ChannelService;
+  access: AccessService;
   /** Botun Discord'a bağlı olup olmadığı (healthcheck için). */
   isReady: () => boolean;
   auth: AuthConfig;
@@ -62,6 +65,16 @@ export function createApiApp(deps: ApiDeps): Hono {
   // Zincir: oturum -> CSRF -> rate limit -> (gövde doğrulama) -> eylem.
   const csrfMw = csrf({ origin: deps.csrfOrigin });
   const guards = [requireAuth, csrfMw, deps.rateLimit] as const;
+
+  // Yalnızca sahiplerin (env) erişebileceği uçlar için — UI'da gizlemek yetmez,
+  // sunucu tarafında da zorunlu kılınır.
+  const requireOwner: MiddlewareHandler = async (c, next) => {
+    const user = sessionUser(c);
+    if (!user || !deps.auth.ownerIds.includes(user.id)) {
+      return c.json({ error: "forbidden" }, 403);
+    }
+    await next();
+  };
 
   app.post("/api/control/pause", ...guards, async (c) =>
     controlResponse(c, await deps.control.pause()),
@@ -118,6 +131,42 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json({ ok }, ok ? 200 : 404);
   });
 
+  // --- Korumalı: playlist içeriği (parça ekle/çıkar/listele) ---
+  app.get("/api/playlists/:name/tracks", requireAuth, (c) => {
+    const user = sessionUser(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    const tracks = deps.panel.getPlaylistTracks(user.id, c.req.param("name"));
+    if (tracks === null) return c.json({ error: "not_found" }, 404);
+    return c.json({ tracks });
+  });
+
+  app.post(
+    "/api/playlists/:name/tracks",
+    ...guards,
+    vValidator("json", playSchema),
+    async (c) => {
+      const user = sessionUser(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      const result = await deps.panel.addToPlaylist(
+        user.id,
+        c.req.param("name"),
+        c.req.valid("json").query,
+      );
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.delete("/api/playlists/:name/tracks/:position", ...guards, (c) => {
+    const user = sessionUser(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    const position = Number(c.req.param("position"));
+    if (!Number.isInteger(position) || position < 0) {
+      return c.json({ error: "invalid_position" }, 400);
+    }
+    const result = deps.panel.removeFromPlaylist(user.id, c.req.param("name"), position);
+    return c.json(result, result.ok ? 200 : 404);
+  });
+
   // --- Korumalı: ses kanalı yönetimi ---
   app.get("/api/channels", requireAuth, (c) =>
     c.json({
@@ -136,6 +185,34 @@ export function createApiApp(deps: ApiDeps): Hono {
     const result = await deps.channels.leave();
     if (result.ok) botEvents.emit("stateChanged");
     return c.json(result, result.ok ? 200 : 409);
+  });
+
+  // --- Sahip: panel yetki yönetimi ---
+  app.get("/api/access/members", requireAuth, requireOwner, async (c) =>
+    c.json({ members: await deps.access.listMembers() }),
+  );
+
+  app.get("/api/access", requireAuth, requireOwner, (c) =>
+    c.json({ access: deps.access.listAccess() }),
+  );
+
+  app.post(
+    "/api/access",
+    ...guards,
+    requireOwner,
+    vValidator("json", grantSchema),
+    (c) => {
+      const owner = sessionUser(c);
+      if (!owner) return c.json({ error: "unauthorized" }, 401);
+      const { userId, username } = c.req.valid("json");
+      const result = deps.access.grant(userId, username, owner.id);
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.delete("/api/access/:userId", ...guards, requireOwner, (c) => {
+    const result = deps.access.revoke(c.req.param("userId"));
+    return c.json(result, result.ok ? 200 : 404);
   });
 
   // --- Korumalı: ayarlar ---

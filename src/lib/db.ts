@@ -75,6 +75,14 @@ db.exec(`
     username TEXT NOT NULL,
     expires_at INTEGER NOT NULL
   );
+
+  -- Sahibin (env) panele erişim verdiği ek kullanıcılar.
+  CREATE TABLE IF NOT EXISTS panel_access (
+    user_id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    granted_by TEXT NOT NULL,
+    granted_at INTEGER NOT NULL
+  );
 `);
 
 logger.info(`Veritabanı hazır: ${dbPath}`);

@@ -29,3 +29,9 @@ export const joinSchema = v.object({
 export const playSchema = v.object({
   query: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(400)),
 });
+
+/** POST /api/access gövdesi (bir üyeye panel erişimi verme). */
+export const grantSchema = v.object({
+  userId: v.pipe(v.string(), v.regex(/^\d{5,25}$/)),
+  username: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64)),
+});

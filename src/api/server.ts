@@ -4,8 +4,10 @@ import { serve } from "@hono/node-server";
 import type { Client } from "discord.js";
 import { WebSocketServer } from "ws";
 import { config } from "../config.js";
+import { isGranted } from "../lib/access.js";
 import { botEvents } from "../lib/events.js";
 import { logger } from "../lib/logger.js";
+import { createAccessService } from "./accessService.js";
 import { createApiApp } from "./app.js";
 import { createBroadcaster } from "./broadcaster.js";
 import { type ChannelService, createChannelService } from "./channelService.js";
@@ -48,16 +50,20 @@ export function startApiServer(client: Client): void {
   const port = Number(process.env.HEALTH_PORT ?? 3000);
   const service = createMusicService(client.lavalink, config.guildId);
   const channels = createChannelService(client, client.lavalink, config.guildId);
+  const ownerIds = config.panel.allowedUserIds;
 
   const app = createApiApp({
     service,
     control: createControlService(client, config.guildId),
     panel: createPanelService(client.lavalink, config.guildId),
     channels,
+    access: createAccessService(client, config.guildId, ownerIds),
     isReady: () => client.isReady(),
     auth: {
       provider: createDiscordProvider(),
-      allowedUserIds: config.panel.allowedUserIds,
+      ownerIds,
+      // Sahip veya panelden yetki verilmiş kullanıcı erişebilir.
+      isAllowed: (userId) => ownerIds.includes(userId) || isGranted(userId),
       generateState,
       cookieSecure: config.panel.cookieSecure,
       panelUrl: "/",

@@ -15,8 +15,10 @@ export interface OAuthProvider {
 
 export interface AuthConfig {
   provider: OAuthProvider;
-  /** Panele girebilecek Discord kullanıcı ID'leri. */
-  allowedUserIds: string[];
+  /** Sahip (env) kullanıcı ID'leri — her zaman erişir ve yetki verebilir. */
+  ownerIds: string[];
+  /** Kullanıcının panele erişebilir olup olmadığı (sahip veya yetkilendirilmiş). */
+  isAllowed: (userId: string) => boolean;
   generateState: () => string;
   /** Üretimde (HTTPS) true olmalı. */
   cookieSecure: boolean;
@@ -83,8 +85,8 @@ export function createAuthRoutes(cfg: AuthConfig): Hono {
       return c.redirect(`${cfg.panelUrl}?error=oauth_failed`);
     }
 
-    // Yalnızca izinli kullanıcılar.
-    if (!cfg.allowedUserIds.includes(user.id)) {
+    // Yalnızca izinli kullanıcılar (sahip veya yetkilendirilmiş).
+    if (!cfg.isAllowed(user.id)) {
       return c.redirect(`${cfg.panelUrl}?error=forbidden`);
     }
 
@@ -102,7 +104,11 @@ export function createAuthRoutes(cfg: AuthConfig): Hono {
   app.get("/me", (c) => {
     const session = currentSession(c);
     if (!session) return c.json({ error: "unauthorized" }, 401);
-    return c.json({ id: session.userId, username: session.username });
+    return c.json({
+      id: session.userId,
+      username: session.username,
+      isOwner: cfg.ownerIds.includes(session.userId),
+    });
   });
 
   app.post("/logout", (c) => {
