@@ -4,14 +4,15 @@ import {
   addTrackToPlaylist,
   createEmptyPlaylist,
   deletePlaylist,
+  getPlaylistMeta,
   getPlaylistTracks,
+  getTracksForLoad,
   listPlaylists,
-  loadPlaylist,
   moveTrackInPlaylist,
-  type PlaylistSummary,
   removeTrackFromPlaylist,
   renamePlaylist,
   savePlaylist,
+  setPlaylistVisibility,
 } from "../lib/playlists.js";
 import {
   getDefaultVolume,
@@ -26,6 +27,16 @@ export interface PanelResult {
   count?: number;
 }
 
+/** Panele dönen playlist özeti. */
+export interface PanelPlaylist {
+  id: number;
+  name: string;
+  trackCount: number;
+  isPublic: boolean;
+  /** Görüntüleyen bu playlistin sahibi mi? (düzenleme kontrolleri buna göre). */
+  isOwner: boolean;
+}
+
 /** Playliste kayıtlı bir parçanın panele dönen görünümü. */
 export interface PlaylistTrackView {
   position: number;
@@ -35,27 +46,40 @@ export interface PlaylistTrackView {
   duration: number | null;
 }
 
+const NOT_OWNER: PanelResult = {
+  ok: false,
+  message: "Bu playlist sana ait değil.",
+};
+
 /**
- * Panel için playlist ve ayar işlemleri. Testlerde sahte bir uygulamayla
- * değiştirilebilir (lavalink/DB gerekmez).
+ * Panel için playlist ve ayar işlemleri. Playlistler id ile tanımlanır;
+ * private (varsayılan) veya public olabilir. Herkes görünür playlistleri
+ * yükleyebilir ama yalnızca sahibi düzenleyebilir. Testlerde sahte bir
+ * uygulamayla değiştirilebilir.
  */
 export interface PanelService {
-  listPlaylists(ownerId: string): PlaylistSummary[];
+  /** Görüntüleyene açık playlistler (kendi + başkalarının public'leri). */
+  listPlaylists(viewerId: string): PanelPlaylist[];
+  /** Mevcut kuyruğu yeni bir playlist olarak kaydeder (private). */
   savePlaylist(ownerId: string, name: string): PanelResult;
-  loadPlaylist(ownerId: string, name: string): Promise<PanelResult>;
-  deletePlaylist(ownerId: string, name: string): boolean;
-  /** Playlistin parçalarını döner; playlist yoksa null. */
-  getPlaylistTracks(ownerId: string, name: string): PlaylistTrackView[] | null;
-  /** Arama sorgusuyla bulunan parça(ları) playliste ekler. */
-  addToPlaylist(ownerId: string, name: string, query: string): Promise<PanelResult>;
-  /** Playlistten verilen konumdaki parçayı siler. */
-  removeFromPlaylist(ownerId: string, name: string, position: number): PanelResult;
-  /** Boş bir playlist oluşturur. */
+  /** Görünür bir playlisti kuyruğa yükler. */
+  loadPlaylist(viewerId: string, id: number): Promise<PanelResult>;
+  /** Playlisti siler (yalnızca sahibi). */
+  deletePlaylist(viewerId: string, id: number): boolean;
+  /** Playlistin parçalarını döner; görünür değilse null. */
+  getPlaylistTracks(viewerId: string, id: number): PlaylistTrackView[] | null;
+  /** Arama sorgusuyla bulunan parça(ları) playliste ekler (yalnızca sahibi). */
+  addToPlaylist(viewerId: string, id: number, query: string): Promise<PanelResult>;
+  /** Verilen konumdaki parçayı siler (yalnızca sahibi). */
+  removeFromPlaylist(viewerId: string, id: number, position: number): PanelResult;
+  /** Boş bir playlist oluşturur (private). */
   createPlaylist(ownerId: string, name: string): PanelResult;
-  /** Bir playlisti yeniden adlandırır. */
-  renamePlaylist(ownerId: string, name: string, newName: string): PanelResult;
-  /** Playlistte bir parçayı başka konuma taşır. */
-  movePlaylistTrack(ownerId: string, name: string, from: number, to: number): PanelResult;
+  /** Playlisti yeniden adlandırır (yalnızca sahibi). */
+  renamePlaylist(viewerId: string, id: number, newName: string): PanelResult;
+  /** Playlistte bir parçayı başka konuma taşır (yalnızca sahibi). */
+  movePlaylistTrack(viewerId: string, id: number, from: number, to: number): PanelResult;
+  /** Görünürlüğü değiştirir (public/private, yalnızca sahibi). */
+  setVisibility(viewerId: string, id: number, isPublic: boolean): PanelResult;
   getSettings(): { defaultVolume: number; keepPlayingAlone: boolean };
   setDefaultVolume(volume: number): void;
   setKeepPlayingAlone(keep: boolean): void;
@@ -65,8 +89,26 @@ export function createPanelService(
   lavalink: LavalinkManager,
   guildId: string,
 ): PanelService {
+  /** Düzenleme izni: yalnızca sahibi. Üst veriyi döner, yoksa null. */
+  const ownedMeta = (viewerId: string, id: number) => {
+    const meta = getPlaylistMeta(guildId, id);
+    return meta && meta.ownerId === viewerId ? meta : null;
+  };
+  /** Görüntüleme izni: sahibi veya public. */
+  const viewableMeta = (viewerId: string, id: number) => {
+    const meta = getPlaylistMeta(guildId, id);
+    return meta && (meta.ownerId === viewerId || meta.isPublic) ? meta : null;
+  };
+
   return {
-    listPlaylists: (ownerId) => listPlaylists(guildId, ownerId),
+    listPlaylists: (viewerId) =>
+      listPlaylists(guildId, viewerId).map((p) => ({
+        id: p.id,
+        name: p.name,
+        trackCount: p.trackCount,
+        isPublic: p.isPublic,
+        isOwner: p.ownerId === viewerId,
+      })),
 
     savePlaylist(ownerId, name) {
       const player = lavalink.getPlayer(guildId);
@@ -81,15 +123,14 @@ export function createPanelService(
       return { ok: true, message: "Kaydedildi.", count: tracks.length };
     },
 
-    async loadPlaylist(ownerId, name) {
-      const stored = loadPlaylist(guildId, ownerId, name);
-      if (!stored || stored.length === 0) {
+    async loadPlaylist(viewerId, id) {
+      if (!viewableMeta(viewerId, id)) {
         return { ok: false, message: "Playlist bulunamadı." };
       }
+      const stored = getTracksForLoad(id);
+      if (stored.length === 0) return { ok: false, message: "Playlist boş." };
       const player = lavalink.getPlayer(guildId);
-      if (!player) {
-        return { ok: false, message: "Bot bir ses kanalında değil." };
-      }
+      if (!player) return { ok: false, message: "Bot bir ses kanalında değil." };
       const tracks = await player.node.decode.multipleTracks(
         stored.map((track) => track.encoded),
         null,
@@ -99,12 +140,14 @@ export function createPanelService(
       return { ok: true, message: "Yüklendi.", count: tracks.length };
     },
 
-    deletePlaylist: (ownerId, name) => deletePlaylist(guildId, ownerId, name),
+    deletePlaylist(viewerId, id) {
+      if (!ownedMeta(viewerId, id)) return false;
+      return deletePlaylist(id);
+    },
 
-    getPlaylistTracks(ownerId, name) {
-      const tracks = getPlaylistTracks(guildId, ownerId, name);
-      if (!tracks) return null;
-      return tracks.map((track) => ({
+    getPlaylistTracks(viewerId, id) {
+      if (!viewableMeta(viewerId, id)) return null;
+      return getPlaylistTracks(id).map((track) => ({
         position: track.position,
         title: track.title,
         author: track.author,
@@ -113,7 +156,8 @@ export function createPanelService(
       }));
     },
 
-    async addToPlaylist(ownerId, name, query) {
+    async addToPlaylist(viewerId, id, query) {
+      if (!ownedMeta(viewerId, id)) return NOT_OWNER;
       // Oynatma gerekmez; parçayı çözmek için bağlı bir node'a arama yaptır.
       const node = [...lavalink.nodeManager.nodes.values()].find((n) => n.connected);
       if (!node) return { ok: false, message: "Ses sunucusuna bağlı değil." };
@@ -127,39 +171,44 @@ export function createPanelService(
       }
 
       const toAdd = result.loadType === "playlist" ? result.tracks : [result.tracks[0]];
-      let added = 0;
-      for (const track of toAdd) {
-        if (!addTrackToPlaylist(guildId, ownerId, name, track)) {
-          return { ok: false, message: "Playlist bulunamadı." };
-        }
-        added++;
-      }
-      return { ok: true, message: `${added} parça eklendi.`, count: added };
+      for (const track of toAdd) addTrackToPlaylist(id, track);
+      return { ok: true, message: `${toAdd.length} parça eklendi.`, count: toAdd.length };
     },
 
-    removeFromPlaylist(ownerId, name, position) {
-      const removed = removeTrackFromPlaylist(guildId, ownerId, name, position);
-      return removed
+    removeFromPlaylist(viewerId, id, position) {
+      if (!ownedMeta(viewerId, id)) return NOT_OWNER;
+      return removeTrackFromPlaylist(id, position)
         ? { ok: true, message: "Parça silindi." }
         : { ok: false, message: "Parça bulunamadı." };
     },
 
     createPlaylist(ownerId, name) {
-      return createEmptyPlaylist(guildId, ownerId, name)
+      return createEmptyPlaylist(guildId, ownerId, name) !== null
         ? { ok: true, message: "Playlist oluşturuldu." }
         : { ok: false, message: "Bu isimde bir playlist zaten var." };
     },
 
-    renamePlaylist(ownerId, name, newName) {
-      return renamePlaylist(guildId, ownerId, name, newName)
+    renamePlaylist(viewerId, id, newName) {
+      if (!ownedMeta(viewerId, id)) return NOT_OWNER;
+      return renamePlaylist(guildId, viewerId, id, newName)
         ? { ok: true, message: "Yeniden adlandırıldı." }
         : { ok: false, message: "Bu isimde bir playlist zaten var." };
     },
 
-    movePlaylistTrack(ownerId, name, from, to) {
-      return moveTrackInPlaylist(guildId, ownerId, name, from, to)
+    movePlaylistTrack(viewerId, id, from, to) {
+      if (!ownedMeta(viewerId, id)) return NOT_OWNER;
+      return moveTrackInPlaylist(id, from, to)
         ? { ok: true, message: "Sıra değişti." }
         : { ok: false, message: "Taşıma başarısız." };
+    },
+
+    setVisibility(viewerId, id, isPublic) {
+      if (!ownedMeta(viewerId, id)) return NOT_OWNER;
+      setPlaylistVisibility(id, isPublic);
+      return {
+        ok: true,
+        message: isPublic ? "Herkese açık yapıldı." : "Gizli yapıldı.",
+      };
     },
 
     getSettings: () => ({

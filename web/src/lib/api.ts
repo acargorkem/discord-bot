@@ -89,8 +89,11 @@ export async function logout(): Promise<void> {
 }
 
 export interface Playlist {
+  id: number;
   name: string;
   trackCount: number;
+  isPublic: boolean;
+  isOwner: boolean;
 }
 
 export async function fetchPlaylists(): Promise<Playlist[]> {
@@ -99,20 +102,23 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
   return ((await res.json()) as { playlists: Playlist[] }).playlists;
 }
 
-export async function savePlaylist(name: string): Promise<void> {
-  await fetch("/api/playlists", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
+/** Mevcut kuyruğu yeni bir playlist olarak kaydeder. */
+export async function savePlaylist(name: string): Promise<PlayResult> {
+  return jsonResult(
+    await fetch("/api/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+  );
 }
 
-export async function loadPlaylist(name: string): Promise<void> {
-  await fetch(`/api/playlists/${encodeURIComponent(name)}/load`, { method: "POST" });
+export async function loadPlaylist(id: number): Promise<void> {
+  await fetch(`/api/playlists/${id}/load`, { method: "POST" });
 }
 
-export async function deletePlaylist(name: string): Promise<void> {
-  await fetch(`/api/playlists/${encodeURIComponent(name)}`, { method: "DELETE" });
+export async function deletePlaylist(id: number): Promise<void> {
+  await fetch(`/api/playlists/${id}`, { method: "DELETE" });
 }
 
 export interface PlaylistTrack {
@@ -124,16 +130,16 @@ export interface PlaylistTrack {
 }
 
 /** Bir playlistin parçalarını döner. */
-export async function fetchPlaylistTracks(name: string): Promise<PlaylistTrack[]> {
-  const res = await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`);
+export async function fetchPlaylistTracks(id: number): Promise<PlaylistTrack[]> {
+  const res = await fetch(`/api/playlists/${id}/tracks`);
   if (!res.ok) return [];
   return ((await res.json()) as { tracks: PlaylistTrack[] }).tracks;
 }
 
 /** Arama sorgusuyla bulunan parçayı playliste ekler. Sonuç mesajını döner. */
-export async function addToPlaylist(name: string, query: string): Promise<PlayResult> {
+export async function addToPlaylist(id: number, query: string): Promise<PlayResult> {
   return jsonResult(
-    await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks`, {
+    await fetch(`/api/playlists/${id}/tracks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
@@ -142,10 +148,8 @@ export async function addToPlaylist(name: string, query: string): Promise<PlayRe
 }
 
 /** Playlistten verilen konumdaki parçayı siler. */
-export async function removeFromPlaylist(name: string, position: number): Promise<void> {
-  await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks/${position}`, {
-    method: "DELETE",
-  });
+export async function removeFromPlaylist(id: number, position: number): Promise<void> {
+  await fetch(`/api/playlists/${id}/tracks/${position}`, { method: "DELETE" });
 }
 
 /** Boş bir playlist oluşturur. */
@@ -160,12 +164,9 @@ export async function createPlaylist(name: string): Promise<PlayResult> {
 }
 
 /** Bir playlisti yeniden adlandırır. */
-export async function renamePlaylist(
-  name: string,
-  newName: string,
-): Promise<PlayResult> {
+export async function renamePlaylist(id: number, newName: string): Promise<PlayResult> {
   return jsonResult(
-    await fetch(`/api/playlists/${encodeURIComponent(name)}`, {
+    await fetch(`/api/playlists/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName }),
@@ -175,15 +176,29 @@ export async function renamePlaylist(
 
 /** Playlistte bir parçayı başka konuma taşır. */
 export async function movePlaylistTrack(
-  name: string,
+  id: number,
   from: number,
   to: number,
 ): Promise<void> {
-  await fetch(`/api/playlists/${encodeURIComponent(name)}/tracks/move`, {
+  await fetch(`/api/playlists/${id}/tracks/move`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ from, to }),
   });
+}
+
+/** Playlistin görünürlüğünü ayarlar (public/private). */
+export async function setPlaylistVisibility(
+  id: number,
+  isPublic: boolean,
+): Promise<PlayResult> {
+  return jsonResult(
+    await fetch(`/api/playlists/${id}/visibility`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ public: isPublic }),
+    }),
+  );
 }
 
 export interface Settings {

@@ -18,6 +18,7 @@ import {
   savePlaylistSchema,
   seekSchema,
   settingsSchema,
+  visibilitySchema,
   volumeSchema,
 } from "./schemas.js";
 
@@ -130,7 +131,12 @@ export function createApiApp(deps: ApiDeps): Hono {
     return controlResponse(c, await deps.control.removeTrack(index));
   });
 
-  // --- Korumalı: playlist ---
+  // --- Korumalı: playlist (id ile; private/public) ---
+  const playlistId = (c: Context): number | null => {
+    const id = Number(c.req.param("id"));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  };
+
   app.get("/api/playlists", requireAuth, (c) => {
     const user = sessionUser(c);
     if (!user) return c.json({ error: "unauthorized" }, 401);
@@ -142,57 +148,6 @@ export function createApiApp(deps: ApiDeps): Hono {
     if (!user) return c.json({ error: "unauthorized" }, 401);
     const result = deps.panel.savePlaylist(user.id, c.req.valid("json").name);
     return c.json(result, result.ok ? 200 : 409);
-  });
-
-  app.post("/api/playlists/:name/load", ...guards, async (c) => {
-    const user = sessionUser(c);
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    const result = await deps.panel.loadPlaylist(user.id, c.req.param("name"));
-    if (result.ok) botEvents.emit("stateChanged");
-    return c.json(result, result.ok ? 200 : 409);
-  });
-
-  app.delete("/api/playlists/:name", ...guards, (c) => {
-    const user = sessionUser(c);
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    const ok = deps.panel.deletePlaylist(user.id, c.req.param("name"));
-    return c.json({ ok }, ok ? 200 : 404);
-  });
-
-  // --- Korumalı: playlist içeriği (parça ekle/çıkar/listele) ---
-  app.get("/api/playlists/:name/tracks", requireAuth, (c) => {
-    const user = sessionUser(c);
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    const tracks = deps.panel.getPlaylistTracks(user.id, c.req.param("name"));
-    if (tracks === null) return c.json({ error: "not_found" }, 404);
-    return c.json({ tracks });
-  });
-
-  app.post(
-    "/api/playlists/:name/tracks",
-    ...guards,
-    vValidator("json", playSchema),
-    async (c) => {
-      const user = sessionUser(c);
-      if (!user) return c.json({ error: "unauthorized" }, 401);
-      const result = await deps.panel.addToPlaylist(
-        user.id,
-        c.req.param("name"),
-        c.req.valid("json").query,
-      );
-      return c.json(result, result.ok ? 200 : 409);
-    },
-  );
-
-  app.delete("/api/playlists/:name/tracks/:position", ...guards, (c) => {
-    const user = sessionUser(c);
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    const position = Number(c.req.param("position"));
-    if (!Number.isInteger(position) || position < 0) {
-      return c.json({ error: "invalid_position" }, 400);
-    }
-    const result = deps.panel.removeFromPlaylist(user.id, c.req.param("name"), position);
-    return c.json(result, result.ok ? 200 : 404);
   });
 
   app.post(
@@ -207,34 +162,108 @@ export function createApiApp(deps: ApiDeps): Hono {
     },
   );
 
-  app.patch(
-    "/api/playlists/:name",
+  app.post("/api/playlists/:id/load", ...guards, async (c) => {
+    const user = sessionUser(c);
+    const id = playlistId(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (id === null) return c.json({ error: "invalid_id" }, 400);
+    const result = await deps.panel.loadPlaylist(user.id, id);
+    if (result.ok) botEvents.emit("stateChanged");
+    return c.json(result, result.ok ? 200 : 409);
+  });
+
+  app.get("/api/playlists/:id/tracks", requireAuth, (c) => {
+    const user = sessionUser(c);
+    const id = playlistId(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (id === null) return c.json({ error: "invalid_id" }, 400);
+    const tracks = deps.panel.getPlaylistTracks(user.id, id);
+    if (tracks === null) return c.json({ error: "not_found" }, 404);
+    return c.json({ tracks });
+  });
+
+  app.post(
+    "/api/playlists/:id/tracks",
     ...guards,
-    vValidator("json", savePlaylistSchema),
-    (c) => {
+    vValidator("json", playSchema),
+    async (c) => {
       const user = sessionUser(c);
+      const id = playlistId(c);
       if (!user) return c.json({ error: "unauthorized" }, 401);
-      const result = deps.panel.renamePlaylist(
+      if (id === null) return c.json({ error: "invalid_id" }, 400);
+      const result = await deps.panel.addToPlaylist(
         user.id,
-        c.req.param("name"),
-        c.req.valid("json").name,
+        id,
+        c.req.valid("json").query,
       );
       return c.json(result, result.ok ? 200 : 409);
     },
   );
 
   app.post(
-    "/api/playlists/:name/tracks/move",
+    "/api/playlists/:id/tracks/move",
     ...guards,
     vValidator("json", moveSchema),
     (c) => {
       const user = sessionUser(c);
+      const id = playlistId(c);
       if (!user) return c.json({ error: "unauthorized" }, 401);
+      if (id === null) return c.json({ error: "invalid_id" }, 400);
       const { from, to } = c.req.valid("json");
-      const result = deps.panel.movePlaylistTrack(user.id, c.req.param("name"), from, to);
+      const result = deps.panel.movePlaylistTrack(user.id, id, from, to);
       return c.json(result, result.ok ? 200 : 409);
     },
   );
+
+  app.delete("/api/playlists/:id/tracks/:position", ...guards, (c) => {
+    const user = sessionUser(c);
+    const id = playlistId(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (id === null) return c.json({ error: "invalid_id" }, 400);
+    const position = Number(c.req.param("position"));
+    if (!Number.isInteger(position) || position < 0) {
+      return c.json({ error: "invalid_position" }, 400);
+    }
+    const result = deps.panel.removeFromPlaylist(user.id, id, position);
+    return c.json(result, result.ok ? 200 : 404);
+  });
+
+  app.patch(
+    "/api/playlists/:id",
+    ...guards,
+    vValidator("json", savePlaylistSchema),
+    (c) => {
+      const user = sessionUser(c);
+      const id = playlistId(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      if (id === null) return c.json({ error: "invalid_id" }, 400);
+      const result = deps.panel.renamePlaylist(user.id, id, c.req.valid("json").name);
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.post(
+    "/api/playlists/:id/visibility",
+    ...guards,
+    vValidator("json", visibilitySchema),
+    (c) => {
+      const user = sessionUser(c);
+      const id = playlistId(c);
+      if (!user) return c.json({ error: "unauthorized" }, 401);
+      if (id === null) return c.json({ error: "invalid_id" }, 400);
+      const result = deps.panel.setVisibility(user.id, id, c.req.valid("json").public);
+      return c.json(result, result.ok ? 200 : 409);
+    },
+  );
+
+  app.delete("/api/playlists/:id", ...guards, (c) => {
+    const user = sessionUser(c);
+    const id = playlistId(c);
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    if (id === null) return c.json({ error: "invalid_id" }, 400);
+    const ok = deps.panel.deletePlaylist(user.id, id);
+    return c.json({ ok }, ok ? 200 : 404);
+  });
 
   // --- Korumalı: ses kanalı yönetimi ---
   app.get("/api/channels", requireAuth, (c) =>
